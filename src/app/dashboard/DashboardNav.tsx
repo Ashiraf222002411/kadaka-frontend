@@ -54,7 +54,7 @@ export default function DashboardNav() {
     pathname === path || (path !== '/dashboard' && path !== '#' && pathname.startsWith(path));
 
   const currentPage =
-    [...NAV_MAIN, ...NAV_SUPPORT].find(n => isActive(n.path))?.name ?? 'Dashboard';
+    [...NAV_MAIN, ...NAV_ADMIN, ...NAV_SUPPORT].find(n => isActive(n.path))?.name ?? 'Dashboard';
 
   function NavItem({ name, path, icon: Icon }: { name: string; path: string; icon: React.ElementType }) {
     const active = isActive(path);
@@ -120,6 +120,16 @@ export default function DashboardNav() {
               {NAV_MAIN.map(item => <NavItem key={item.path} {...item} />)}
             </ul>
           </div>
+          {role === 'branch_manager' && (
+            <div>
+              <p className="px-3 mb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+                Admin
+              </p>
+              <ul className="space-y-0.5">
+                {NAV_ADMIN.map(item => <NavItem key={item.path} {...item} />)}
+              </ul>
+            </div>
+          )}
           <div>
             <p className="px-3 mb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
               Support
