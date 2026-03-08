@@ -1,6 +1,8 @@
 import { getToken } from './auth';
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
+const BASE =
+  process.env.NEXT_PUBLIC_API_URL ??
+  'https://kadaka-backend-production.up.railway.app';
 
 async function apiFetch<T = unknown>(
   path: string,
