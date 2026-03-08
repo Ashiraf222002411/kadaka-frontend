@@ -1,20 +1,109 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, X, CheckCircle, XCircle, Send, Eye, Loader2, AlertCircle, BookOpen, RefreshCw } from 'lucide-react';
-import { loans, members } from '@/lib/api';
+import {
+  Plus, Search, X, CheckCircle, XCircle, Send, Eye,
+  Loader2, AlertCircle, BookOpen, RefreshCw, Upload, Camera,
+} from 'lucide-react';
+import { loans, members, uploadFile } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 
-type Loan = { id: string; loan_number: string; member_name: string; group_name: string; loan_type: string; amount_applied: number; approved_amount: number; total_interest: number; total_repayable: number; daily_payment: number; status: string; balance_total: number; days_overdue: number; created_at: string };
+type Loan = {
+  id: string; loan_number: string; member_name: string; group_name: string;
+  loan_type: string; amount_applied: number; approved_amount: number;
+  total_interest: number; total_repayable: number; daily_payment: number;
+  status: string; balance_total: number; days_overdue: number; created_at: string;
+};
 type Member = { id: string; member_code: string; full_name: string; group_name: string };
 type Preview = { totalInterest: number; totalRepayable: number; dailyPayment: number };
 
 const ugx = (n: number | string | null) => 'UGX ' + Number(n || 0).toLocaleString();
 
-const TYPE_COLORS: Record<string, string> = { business: 'bg-green-50 text-green-700', school_fees: 'bg-blue-50 text-blue-700', emergency: 'bg-red-50 text-red-700', agriculture: 'bg-emerald-50 text-emerald-700', salary: 'bg-purple-50 text-purple-700' };
-const STATUS_COLORS: Record<string, string> = { pending: 'bg-amber-50 text-amber-700 border-amber-200', approved: 'bg-blue-50 text-blue-700 border-blue-200', disbursed: 'bg-purple-50 text-purple-700 border-purple-200', active: 'bg-green-50 text-green-700 border-green-200', cleared: 'bg-gray-100 text-gray-600 border-gray-200', rejected: 'bg-red-50 text-red-700 border-red-200' };
+const LOAN_TYPES = [
+  { value: 'business',         label: 'Business' },
+  { value: 'school_fees',      label: 'School Fees' },
+  { value: 'home_improvement', label: 'Home Improvement' },
+  { value: 'emergency',        label: 'Emergency' },
+  { value: 'agriculture',      label: 'Agriculture' },
+  { value: 'salary',           label: 'Salary' },
+];
+
+const TYPE_COLORS: Record<string, string> = {
+  business: 'bg-green-50 text-green-700', school_fees: 'bg-blue-50 text-blue-700',
+  home_improvement: 'bg-teal-50 text-teal-700', emergency: 'bg-red-50 text-red-700',
+  agriculture: 'bg-emerald-50 text-emerald-700', salary: 'bg-purple-50 text-purple-700',
+};
+const STATUS_COLORS: Record<string, string> = {
+  pending: 'bg-amber-50 text-amber-700 border-amber-200', approved: 'bg-blue-50 text-blue-700 border-blue-200',
+  disbursed: 'bg-purple-50 text-purple-700 border-purple-200', active: 'bg-green-50 text-green-700 border-green-200',
+  cleared: 'bg-gray-100 text-gray-600 border-gray-200', rejected: 'bg-red-50 text-red-700 border-red-200',
+};
 
 const Sk = () => <div className="animate-pulse bg-gray-100 rounded-xl h-10 w-full" />;
+
+// ── Modal defined OUTSIDE component to prevent focus loss on re-render ────────
+const inputCls = 'w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50 focus:bg-white';
+const labelCls = 'block text-xs font-semibold text-gray-700 mb-1.5';
+
+function Modal({
+  title, onClose, children, footer,
+}: {
+  title: string; onClose: () => void; children: React.ReactNode; footer?: React.ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <h3 className="font-bold text-gray-900">{title}</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+            <X className="w-4 h-4 text-gray-500" />
+          </button>
+        </div>
+        <div className="overflow-y-auto p-6 flex-1">{children}</div>
+        {footer && (
+          <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex gap-3 justify-end shrink-0">
+            {footer}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── FileUploadField component (also outside) ──────────────────────────────────
+function FileUploadField({
+  label, accept, onUploaded, uploading, setUploading, uploaded,
+}: {
+  label: string; accept: string;
+  onUploaded: (url: string) => void;
+  uploading: boolean; setUploading: (v: boolean) => void;
+  uploaded: boolean;
+}) {
+  const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { url } = await uploadFile(file);
+      onUploaded(url);
+    } catch { /* ignore */ }
+    finally { setUploading(false); }
+  };
+  return (
+    <div>
+      <label className={labelCls}>{label}</label>
+      <label className={`flex items-center gap-3 px-3 py-2.5 border-2 border-dashed rounded-xl cursor-pointer transition-all ${uploaded ? 'border-green-400 bg-green-50' : 'border-gray-200 hover:border-green-300 bg-gray-50'}`}>
+        {uploading ? <Loader2 className="w-4 h-4 animate-spin text-green-600" /> : uploaded ? <CheckCircle className="w-4 h-4 text-green-600" /> : <Upload className="w-4 h-4 text-gray-400" />}
+        <span className={`text-xs font-medium ${uploaded ? 'text-green-700' : 'text-gray-500'}`}>
+          {uploading ? 'Uploading…' : uploaded ? 'Uploaded ✓' : 'Click to choose file'}
+        </span>
+        <input type="file" accept={accept} onChange={handleChange} className="hidden" />
+      </label>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function LoansPageClient() {
   const { user } = useAuth();
@@ -39,7 +128,7 @@ export default function LoansPageClient() {
   const [showView,     setShowView]     = useState(false);
   const [selected,     setSelected]     = useState<Loan | null>(null);
 
-  // new loan form
+  // new loan form — 4 steps
   const [step,      setStep]      = useState(1);
   const [memberId,  setMemberId]  = useState('');
   const [loanType,  setLoanType]  = useState('business');
@@ -47,6 +136,14 @@ export default function LoansPageClient() {
   const [purpose,   setPurpose]   = useState('');
   const [preview,   setPreview]   = useState<Preview | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // step 3 — assets & docs
+  const [assetDesc,  setAssetDesc]  = useState('');
+  const [assetValue, setAssetValue] = useState('');
+  const [nokPhotoUrl, setNokPhotoUrl] = useState('');
+  const [supportingDocUrl, setSupportingDocUrl] = useState('');
+  const [uploadingNok, setUploadingNok] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
 
   // approve
   const [approveAmt, setApproveAmt] = useState('');
@@ -75,7 +172,6 @@ export default function LoansPageClient() {
 
   useEffect(() => { fetchLoans(); fetchMembers(); }, [fetchLoans, fetchMembers]);
 
-  // Preview on amount change
   useEffect(() => {
     if (!amount || Number(amount) < 1000) { setPreview(null); return; }
     loans.preview(Number(amount)).then(setPreview).catch(() => {});
@@ -93,16 +189,32 @@ export default function LoansPageClient() {
     return matchQ && matchS;
   });
 
-  const stats = { total: loanList.length, active: loanList.filter(l => l.status === 'active').length, pending: loanList.filter(l => l.status === 'pending').length, overdue: loanList.filter(l => Number(l.days_overdue) > 0).length };
+  const stats = {
+    total: loanList.length,
+    active: loanList.filter(l => l.status === 'active').length,
+    pending: loanList.filter(l => l.status === 'pending').length,
+    overdue: loanList.filter(l => Number(l.days_overdue) > 0).length,
+  };
 
-  // Submit new loan
+  const resetNewForm = () => {
+    setStep(1); setMemberId(''); setLoanType('business'); setAmount('');
+    setPurpose(''); setPreview(null); setAssetDesc(''); setAssetValue('');
+    setNokPhotoUrl(''); setSupportingDocUrl('');
+  };
+
   const submitLoan = async () => {
     if (!memberId || !amount) return;
     setSubmitting(true);
     try {
-      await loans.create({ member_id: memberId, loan_type: loanType, amount_applied: Number(amount), purpose });
+      const assets = assetDesc ? [{ description: assetDesc, approximate_value: Number(assetValue) || 0 }] : [];
+      await loans.create({
+        member_id: memberId, loan_type: loanType, amount_applied: Number(amount),
+        purpose, assets,
+        nok_photo_url: nokPhotoUrl || undefined,
+        supporting_doc_url: supportingDocUrl || undefined,
+      });
       await fetchLoans();
-      setShowNew(false); setStep(1); setMemberId(''); setAmount(''); setPurpose(''); setPreview(null);
+      setShowNew(false); resetNewForm();
       showToast('Loan application submitted successfully');
     } catch (e) { setError(e instanceof Error ? e.message : 'Failed to submit'); }
     finally { setSubmitting(false); }
@@ -146,32 +258,16 @@ export default function LoansPageClient() {
   const openDisburse = (l: Loan) => { setSelected(l); setShowDisburse(true); };
   const openView     = (l: Loan) => { setSelected(l); setShowView(true); };
 
-  const Modal = ({ title, onClose, children, footer }: { title: string; onClose: () => void; children: React.ReactNode; footer?: React.ReactNode }) => (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-          <h3 className="font-bold text-gray-900">{title}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"><X className="w-4 h-4 text-gray-500" /></button>
-        </div>
-        <div className="overflow-y-auto p-6 flex-1">{children}</div>
-        {footer && <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex gap-3 justify-end shrink-0">{footer}</div>}
-      </div>
-    </div>
-  );
-
-  const inputCls = 'w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50 focus:bg-white';
-  const labelCls = 'block text-xs font-semibold text-gray-700 mb-1.5';
+  const step1Valid = memberId && amount && Number(amount) >= 1000;
 
   return (
     <div className="space-y-6">
-      {/* Toast */}
       {toast && (
         <div className="fixed top-4 right-4 z-[60] bg-green-600 text-white px-4 py-3 rounded-2xl shadow-lg text-sm font-semibold flex items-center gap-2">
           <CheckCircle className="w-4 h-4" /> {toast}
         </div>
       )}
 
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-extrabold text-gray-900">Loans</h1>
@@ -180,7 +276,7 @@ export default function LoansPageClient() {
         <div className="flex items-center gap-2">
           <button onClick={fetchLoans} className="p-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-gray-500"><RefreshCw className="w-4 h-4" /></button>
           {canCreate && (
-            <button onClick={() => setShowNew(true)} className="flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm">
+            <button onClick={() => { resetNewForm(); setShowNew(true); }} className="flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm">
               <Plus className="w-4 h-4" /> New Loan Application
             </button>
           )}
@@ -189,7 +285,6 @@ export default function LoansPageClient() {
 
       {error && <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-700 flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" />{error}</div>}
 
-      {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[['Total Loans', stats.total, 'text-gray-900'], ['Active', stats.active, 'text-green-600'], ['Pending', stats.pending, 'text-amber-600'], ['Overdue', stats.overdue, 'text-red-600']].map(([l, v, c]) => (
           <div key={String(l)} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-center">
@@ -199,7 +294,6 @@ export default function LoansPageClient() {
         ))}
       </div>
 
-      {/* Filters */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col sm:flex-row gap-3">
         <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 flex-1 focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-100">
           <Search className="w-4 h-4 text-gray-400 shrink-0" />
@@ -211,7 +305,6 @@ export default function LoansPageClient() {
         </select>
       </div>
 
-      {/* Table */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         {loading ? (
           <div className="p-6 space-y-3">{[...Array(5)].map((_, i) => <Sk key={i} />)}</div>
@@ -239,7 +332,7 @@ export default function LoansPageClient() {
                       <p className="text-xs text-gray-500">{l.group_name}</p>
                     </td>
                     <td className="px-4 py-3 hidden lg:table-cell">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${TYPE_COLORS[l.loan_type] ?? 'bg-gray-100 text-gray-600'}`}>{l.loan_type?.replace('_', ' ')}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${TYPE_COLORS[l.loan_type] ?? 'bg-gray-100 text-gray-600'}`}>{l.loan_type?.replace(/_/g, ' ')}</span>
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-gray-900 text-xs">{ugx(l.amount_applied)}</td>
                     <td className="px-4 py-3 text-right text-xs font-semibold text-gray-700 hidden md:table-cell">{ugx(l.balance_total)}</td>
@@ -271,23 +364,36 @@ export default function LoansPageClient() {
         )}
       </div>
 
-      {/* ── NEW LOAN MODAL ── */}
+      {/* ── NEW LOAN MODAL (4 steps) ── */}
       {showNew && (
-        <Modal title={`New Loan Application — Step ${step} of 3`} onClose={() => { setShowNew(false); setStep(1); }}
+        <Modal
+          title={`New Loan Application — Step ${step} of 4`}
+          onClose={() => { setShowNew(false); resetNewForm(); }}
           footer={
             <>
               {step > 1 && <button onClick={() => setStep(s => s - 1)} className="px-4 py-2 text-sm font-semibold text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50">Back</button>}
-              {step < 3 ? (
-                <button onClick={() => setStep(s => s + 1)} disabled={step === 1 && (!memberId || !amount)} className="px-4 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-xl disabled:opacity-50">Next</button>
+              {step < 4 ? (
+                <button
+                  onClick={() => setStep(s => s + 1)}
+                  disabled={step === 1 && !step1Valid}
+                  className="px-4 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-xl disabled:opacity-50"
+                >Next</button>
               ) : (
-                <button onClick={submitLoan} disabled={submitting} className="px-4 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-xl flex items-center gap-2 disabled:opacity-50">
+                <button
+                  onClick={submitLoan}
+                  disabled={submitting}
+                  className="px-4 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-xl flex items-center gap-2 disabled:opacity-50"
+                >
                   {submitting && <Loader2 className="w-4 h-4 animate-spin" />} Submit Application
                 </button>
               )}
             </>
-          }>
+          }
+        >
+          {/* Step 1 — Loan Details */}
           {step === 1 && (
             <div className="space-y-4">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Step 1 — Loan Details</p>
               <div>
                 <label className={labelCls}>Member <span className="text-red-500">*</span></label>
                 <select value={memberId} onChange={e => setMemberId(e.target.value)} className={inputCls}>
@@ -297,9 +403,14 @@ export default function LoansPageClient() {
               </div>
               <div>
                 <label className={labelCls}>Loan Type <span className="text-red-500">*</span></label>
-                <select value={loanType} onChange={e => setLoanType(e.target.value)} className={inputCls}>
-                  {['business','school_fees','emergency','agriculture','salary'].map(t => <option key={t} value={t} className="capitalize">{t.replace('_', ' ')}</option>)}
-                </select>
+                <div className="grid grid-cols-2 gap-2">
+                  {LOAN_TYPES.map(t => (
+                    <button key={t.value} type="button" onClick={() => setLoanType(t.value)}
+                      className={`py-2.5 px-3 rounded-xl text-xs font-semibold border-2 transition-all text-left ${loanType === t.value ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div>
                 <label className={labelCls}>Amount Applied (UGX) <span className="text-red-500">*</span></label>
@@ -307,16 +418,23 @@ export default function LoansPageClient() {
               </div>
               <div>
                 <label className={labelCls}>Purpose (Optional)</label>
-                <textarea value={purpose} onChange={e => setPurpose(e.target.value)} rows={3} placeholder="Brief description of loan purpose…" className={inputCls} />
+                <textarea value={purpose} onChange={e => setPurpose(e.target.value)} rows={2} placeholder="Brief description of loan purpose…" className={inputCls} />
               </div>
             </div>
           )}
+
+          {/* Step 2 — Calculation Preview */}
           {step === 2 && (
             <div className="space-y-4">
-              <h4 className="font-semibold text-gray-800">Loan Calculation Preview</h4>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Step 2 — Loan Preview</p>
               {preview ? (
                 <div className="bg-green-50 border border-green-100 rounded-xl p-5 space-y-3">
-                  {[['Principal', ugx(amount)], ['Interest (10%)', ugx(preview.totalInterest)], ['Total Repayable', ugx(preview.totalRepayable)], ['Daily Payment (30 days)', ugx(preview.dailyPayment)]].map(([k, v]) => (
+                  {[
+                    ['Principal', ugx(amount)],
+                    ['Interest (20%)', ugx(preview.totalInterest)],
+                    ['Total Repayable', ugx(preview.totalRepayable)],
+                    ['Daily Payment (30 days)', ugx(preview.dailyPayment)],
+                  ].map(([k, v]) => (
                     <div key={k} className="flex justify-between text-sm">
                       <span className="text-gray-600">{k}</span>
                       <span className="font-bold text-gray-900">{v}</span>
@@ -325,16 +443,66 @@ export default function LoansPageClient() {
                 </div>
               ) : <p className="text-sm text-gray-400">Loading preview…</p>}
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 font-medium">
-                ℹ️ Interest is 10% flat on principal over 30 days. Payment is allocated: interest first, then principal.
+                ℹ️ Interest is 20% flat on principal over 30 days. Repayment is on a daily basis; interest is allocated first, then principal.
               </div>
             </div>
           )}
+
+          {/* Step 3 — Assets & Documents */}
           {step === 3 && (
             <div className="space-y-4">
-              <h4 className="font-semibold text-gray-800">Confirm Application</h4>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Step 3 — Assets & Documents</p>
+              <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-3">
+                <p className="text-xs font-semibold text-gray-700">Assets Attached (Optional)</p>
+                <div>
+                  <label className={labelCls}>Asset Description</label>
+                  <input type="text" value={assetDesc} onChange={e => setAssetDesc(e.target.value)} placeholder="e.g. Motorcycle, TV, Land title…" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Approximate Value (UGX)</label>
+                  <input type="number" value={assetValue} onChange={e => setAssetValue(e.target.value)} min={0} step={10000} placeholder="e.g. 500000" className={inputCls} />
+                </div>
+              </div>
+              <FileUploadField
+                label="Next of Kin / Guarantor Photo"
+                accept="image/*"
+                onUploaded={setNokPhotoUrl}
+                uploading={uploadingNok}
+                setUploading={setUploadingNok}
+                uploaded={!!nokPhotoUrl}
+              />
+              <FileUploadField
+                label="Supporting Document (PDF/Image)"
+                accept=".pdf,image/*"
+                onUploaded={setSupportingDocUrl}
+                uploading={uploadingDoc}
+                setUploading={setUploadingDoc}
+                uploaded={!!supportingDocUrl}
+              />
+              <p className="text-xs text-gray-400">Documents are optional but recommended for the loan file.</p>
+            </div>
+          )}
+
+          {/* Step 4 — Confirm */}
+          {step === 4 && (
+            <div className="space-y-4">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Step 4 — Confirm Application</p>
               <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-2 text-sm">
-                {[['Member', memberList.find(m => m.id === memberId)?.full_name ?? '—'], ['Loan Type', loanType.replace('_', ' ')], ['Amount', ugx(amount)], ['Purpose', purpose || '—']].map(([k, v]) => (
-                  <div key={k} className="flex justify-between"><span className="text-gray-500">{k}</span><span className="font-semibold text-gray-900 capitalize">{v}</span></div>
+                {[
+                  ['Member', memberList.find(m => m.id === memberId)?.full_name ?? '—'],
+                  ['Loan Type', loanType.replace(/_/g, ' ')],
+                  ['Amount Applied', ugx(amount)],
+                  ['Total Repayable', preview ? ugx(preview.totalRepayable) : '—'],
+                  ['Daily Payment', preview ? ugx(preview.dailyPayment) : '—'],
+                  ['Purpose', purpose || '—'],
+                  ['Assets', assetDesc || '—'],
+                  ['NOK Photo', nokPhotoUrl ? '✓ Uploaded' : 'None'],
+                  ['Supporting Doc', supportingDocUrl ? '✓ Uploaded' : 'None'],
+                ].map(([k, v]) => (
+                  <div key={k} className="flex justify-between">
+                    <span className="text-gray-500">{k}</span>
+                    <span className="font-semibold text-gray-900 capitalize">{v}</span>
+                  </div>
                 ))}
               </div>
               <p className="text-xs text-gray-500">This will create a loan application awaiting Branch Manager approval.</p>
@@ -429,7 +597,14 @@ export default function LoansPageClient() {
         <Modal title={`Loan Details — ${selected.loan_number}`} onClose={() => { setShowView(false); setSelected(null); }}>
           <div className="space-y-4 text-sm">
             <div className="grid grid-cols-2 gap-3">
-              {[['Member', selected.member_name], ['Group', selected.group_name], ['Type', selected.loan_type?.replace('_', ' ')], ['Status', selected.status], ['Amount Applied', ugx(selected.amount_applied)], ['Approved', ugx(selected.approved_amount)], ['Total Interest', ugx(selected.total_interest)], ['Total Repayable', ugx(selected.total_repayable)], ['Daily Payment', ugx(selected.daily_payment)], ['Balance', ugx(selected.balance_total)], ['Days Overdue', selected.days_overdue > 0 ? `${selected.days_overdue} days` : 'None']].map(([k, v]) => (
+              {[
+                ['Member', selected.member_name], ['Group', selected.group_name],
+                ['Type', selected.loan_type?.replace(/_/g, ' ')], ['Status', selected.status],
+                ['Amount Applied', ugx(selected.amount_applied)], ['Approved', ugx(selected.approved_amount)],
+                ['Total Interest', ugx(selected.total_interest)], ['Total Repayable', ugx(selected.total_repayable)],
+                ['Daily Payment', ugx(selected.daily_payment)], ['Balance', ugx(selected.balance_total)],
+                ['Days Overdue', selected.days_overdue > 0 ? `${selected.days_overdue} days` : 'None'],
+              ].map(([k, v]) => (
                 <div key={k} className="bg-gray-50 rounded-xl p-3">
                   <p className="text-xs text-gray-500 mb-0.5">{k}</p>
                   <p className="font-semibold text-gray-900 capitalize">{v}</p>

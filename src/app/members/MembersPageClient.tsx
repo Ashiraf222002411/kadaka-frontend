@@ -1,19 +1,62 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, X, CheckCircle, Loader2, AlertCircle, RefreshCw, User, Eye } from 'lucide-react';
-import { members, groups } from '@/lib/api';
+import { Plus, Search, X, CheckCircle, Loader2, AlertCircle, RefreshCw, User, Eye, Upload, Camera } from 'lucide-react';
+import { members, groups, uploadFile } from '@/lib/api';
 
-type Member = { id: string; member_code: string; full_name: string; national_id: string; phone: string; gender: string; date_of_birth: string; district: string; village?: string; business_type: string; monthly_income: number; group_name?: string; group_id?: string; residence_status?: string; status: string; active_loans?: number; total_borrowed?: number };
+type Member = {
+  id: string; member_code: string; full_name: string; national_id: string; phone: string;
+  gender: string; date_of_birth: string; district: string; village?: string;
+  business_type: string; monthly_income: number; group_name?: string; group_id?: string;
+  residence_status?: string; status: string; active_loans?: number; total_borrowed?: number;
+  photo_url?: string; supporting_doc_url?: string;
+};
 type Group  = { id: string; name: string; group_code: string };
-type F = { full_name: string; national_id: string; phone: string; alternative_phone: string; gender: string; date_of_birth: string; district: string; village: string; residence_status: string; landlord_name: string; landlord_phone: string; landlord_location: string; business_type: string; monthly_income: string; group_id: string; next_of_kin_name: string; next_of_kin_relationship: string; next_of_kin_phone: string };
+type F = {
+  full_name: string; national_id: string; phone: string; alternative_phone: string;
+  gender: string; date_of_birth: string; district: string; village: string;
+  residence_status: string; landlord_name: string; landlord_phone: string; landlord_location: string;
+  business_type: string; monthly_income: string; group_id: string;
+  next_of_kin_name: string; next_of_kin_relationship: string; next_of_kin_phone: string;
+  photo_url: string; supporting_doc_url: string;
+};
 
-const INIT: F = { full_name: '', national_id: '', phone: '', alternative_phone: '', gender: 'female', date_of_birth: '', district: '', village: '', residence_status: 'owned', landlord_name: '', landlord_phone: '', landlord_location: '', business_type: '', monthly_income: '', group_id: '', next_of_kin_name: '', next_of_kin_relationship: '', next_of_kin_phone: '' };
-const SC: Record<string, string> = { active: 'bg-green-50 text-green-700 border-green-200', inactive: 'bg-gray-100 text-gray-600 border-gray-200', defaulted: 'bg-red-50 text-red-700 border-red-200', blacklisted: 'bg-red-100 text-red-800 border-red-300' };
+const INIT: F = {
+  full_name: '', national_id: '', phone: '', alternative_phone: '', gender: 'female',
+  date_of_birth: '', district: '', village: '', residence_status: 'owned',
+  landlord_name: '', landlord_phone: '', landlord_location: '', business_type: '',
+  monthly_income: '', group_id: '', next_of_kin_name: '', next_of_kin_relationship: '',
+  next_of_kin_phone: '', photo_url: '', supporting_doc_url: '',
+};
+
+const SC: Record<string, string> = {
+  active: 'bg-green-50 text-green-700 border-green-200', inactive: 'bg-gray-100 text-gray-600 border-gray-200',
+  defaulted: 'bg-red-50 text-red-700 border-red-200', blacklisted: 'bg-red-100 text-red-800 border-red-300',
+};
 const ugx = (n: number | string | null) => 'UGX ' + Number(n || 0).toLocaleString();
 const Sk  = () => <div className="animate-pulse bg-gray-100 rounded-xl h-10 w-full" />;
 const ic = 'w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50 focus:bg-white';
 const lc = 'block text-xs font-semibold text-gray-700 mb-1.5';
+
+function FileUploadBtn({ label, accept, uploaded, uploading, onChange }: {
+  label: string; accept: string; uploaded: boolean; uploading: boolean;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) {
+  return (
+    <div>
+      <label className={lc}>{label}</label>
+      <label className={`flex items-center gap-3 px-3 py-2.5 border-2 border-dashed rounded-xl cursor-pointer transition-all ${uploaded ? 'border-green-400 bg-green-50' : 'border-gray-200 hover:border-green-300 bg-gray-50'}`}>
+        {uploading ? <Loader2 className="w-4 h-4 animate-spin text-green-600" />
+          : uploaded ? <CheckCircle className="w-4 h-4 text-green-600" />
+          : <Upload className="w-4 h-4 text-gray-400" />}
+        <span className={`text-xs font-medium ${uploaded ? 'text-green-700' : 'text-gray-500'}`}>
+          {uploading ? 'Uploading…' : uploaded ? 'Uploaded ✓' : 'Click to choose file'}
+        </span>
+        <input type="file" accept={accept} onChange={onChange} className="hidden" />
+      </label>
+    </div>
+  );
+}
 
 export default function MembersPageClient() {
   const [list, setList] = useState<Member[]>([]);
@@ -30,6 +73,8 @@ export default function MembersPageClient() {
   const [submitting, setSubmitting] = useState(false);
   const [formErr, setFormErr]     = useState('');
   const [f, setF] = useState<F>(INIT);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [uploadingDoc,   setUploadingDoc]   = useState(false);
 
   const upd = (k: keyof F) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF(p => ({ ...p, [k]: e.target.value }));
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(''), 3500); };
@@ -48,17 +93,48 @@ export default function MembersPageClient() {
 
   const openModal = () => { setF(INIT); setStep(1); setFormErr(''); setShowModal(true); };
 
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    setUploadingPhoto(true);
+    try { const { url } = await uploadFile(file); setF(p => ({ ...p, photo_url: url })); } catch {}
+    finally { setUploadingPhoto(false); }
+  };
+
+  const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    setUploadingDoc(true);
+    try { const { url } = await uploadFile(file); setF(p => ({ ...p, supporting_doc_url: url })); } catch {}
+    finally { setUploadingDoc(false); }
+  };
+
   const submit = async () => {
-    if (!f.full_name || !f.national_id || !f.phone || !f.date_of_birth || !f.district || !f.business_type || !f.monthly_income) { setFormErr('Fill all required fields'); return; }
+    if (!f.full_name || !f.national_id || !f.phone || !f.date_of_birth || !f.district || !f.business_type || !f.monthly_income) {
+      setFormErr('Fill all required fields'); return;
+    }
     setFormErr(''); setSubmitting(true);
     try {
-      await members.create({ ...f, monthly_income: Number(f.monthly_income), group_id: f.group_id || undefined, alternative_phone: f.alternative_phone || undefined, village: f.village || undefined, next_of_kin_name: f.next_of_kin_name || undefined, next_of_kin_relationship: f.next_of_kin_relationship || undefined, next_of_kin_phone: f.next_of_kin_phone || undefined, ...(f.residence_status !== 'rented' ? { landlord_name: undefined, landlord_phone: undefined, landlord_location: undefined } : {}) });
+      await members.create({
+        ...f, monthly_income: Number(f.monthly_income),
+        group_id: f.group_id || undefined,
+        alternative_phone: f.alternative_phone || undefined,
+        village: f.village || undefined,
+        next_of_kin_name: f.next_of_kin_name || undefined,
+        next_of_kin_relationship: f.next_of_kin_relationship || undefined,
+        next_of_kin_phone: f.next_of_kin_phone || undefined,
+        photo_url: f.photo_url || undefined,
+        supporting_doc_url: f.supporting_doc_url || undefined,
+        ...(f.residence_status !== 'rented' ? { landlord_name: undefined, landlord_phone: undefined, landlord_location: undefined } : {}),
+      });
       await fetchAll(); setShowModal(false); showToast('Member registered');
     } catch (e) { setFormErr(e instanceof Error ? e.message : 'Failed'); }
     finally { setSubmitting(false); }
   };
 
-  const filtered = list.filter(m => { const q = search.toLowerCase(); return (!q || m.full_name?.toLowerCase().includes(q) || m.member_code?.toLowerCase().includes(q) || m.national_id?.includes(q)) && (statusF === 'all' || m.status === statusF); });
+  const filtered = list.filter(m => {
+    const q = search.toLowerCase();
+    return (!q || m.full_name?.toLowerCase().includes(q) || m.member_code?.toLowerCase().includes(q) || m.national_id?.includes(q)) &&
+      (statusF === 'all' || m.status === statusF);
+  });
   const st = { total: list.length, active: list.filter(m => m.status === 'active').length, inactive: list.filter(m => m.status === 'inactive').length, defaulted: list.filter(m => m.status === 'defaulted').length };
 
   return (
@@ -111,8 +187,10 @@ export default function MembersPageClient() {
                   <tr key={m.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center shrink-0">
-                          <span className="text-[10px] font-bold text-white">{m.full_name?.split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase()}</span>
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center shrink-0 overflow-hidden">
+                          {m.photo_url
+                            ? <img src={m.photo_url} alt="" className="w-full h-full object-cover" />
+                            : <span className="text-[10px] font-bold text-white">{m.full_name?.split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase()}</span>}
                         </div>
                         <div><p className="font-semibold text-gray-900">{m.full_name}</p><p className="text-xs text-gray-500 font-mono">{m.member_code}</p></div>
                       </div>
@@ -129,19 +207,36 @@ export default function MembersPageClient() {
             </table></div>}
       </div>
 
+      {/* ── REGISTER MODAL ── */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-              <div><h3 className="font-bold text-gray-900">Register New Member</h3>
+              <div>
+                <h3 className="font-bold text-gray-900">Register New Member</h3>
                 <div className="flex gap-1.5 mt-1.5">{[1,2,3].map(s => <div key={s} className={`h-1 w-12 rounded-full ${s <= step ? 'bg-green-600' : 'bg-gray-200'}`} />)}</div>
               </div>
               <button onClick={() => setShowModal(false)} className="p-1.5 rounded-lg hover:bg-gray-100"><X className="w-4 h-4 text-gray-500" /></button>
             </div>
             <div className="overflow-y-auto p-6 flex-1 space-y-4">
               {formErr && <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700"><AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />{formErr}</div>}
+
               {step === 1 && <div className="space-y-4">
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Step 1 — Personal</p>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Step 1 — Personal Info & Photo</p>
+                {/* Photo upload */}
+                <div>
+                  <label className={lc}>Member Photo</label>
+                  <label className={`flex items-center gap-3 px-3 py-2.5 border-2 border-dashed rounded-xl cursor-pointer transition-all ${f.photo_url ? 'border-green-400 bg-green-50' : 'border-gray-200 hover:border-green-300 bg-gray-50'}`}>
+                    {f.photo_url
+                      ? <img src={f.photo_url} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
+                      : uploadingPhoto ? <Loader2 className="w-4 h-4 animate-spin text-green-600" />
+                      : <Camera className="w-4 h-4 text-gray-400" />}
+                    <span className={`text-xs font-medium ${f.photo_url ? 'text-green-700' : 'text-gray-500'}`}>
+                      {uploadingPhoto ? 'Uploading…' : f.photo_url ? 'Photo uploaded ✓' : 'Upload passport photo (optional)'}
+                    </span>
+                    <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+                  </label>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2"><label className={lc}>Full Name *</label><input value={f.full_name} onChange={upd('full_name')} placeholder="First Last" className={ic} /></div>
                   <div><label className={lc}>National ID *</label><input value={f.national_id} onChange={upd('national_id')} placeholder="CM..." className={ic} /></div>
@@ -153,6 +248,7 @@ export default function MembersPageClient() {
                   </div>
                 </div>
               </div>}
+
               {step === 2 && <div className="space-y-4">
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Step 2 — Location & Business</p>
                 <div className="grid grid-cols-2 gap-4">
@@ -170,8 +266,9 @@ export default function MembersPageClient() {
                   <div><label className={lc}>Monthly Income (UGX) *</label><input type="number" value={f.monthly_income} onChange={upd('monthly_income')} min={0} step={10000} className={ic} /></div>
                 </div>
               </div>}
+
               {step === 3 && <div className="space-y-4">
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Step 3 — Group & Next of Kin</p>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Step 3 — Group, Next of Kin & Documents</p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2"><label className={lc}>Lending Group</label>
                     <select value={f.group_id} onChange={upd('group_id')} className={ic}>
@@ -183,6 +280,14 @@ export default function MembersPageClient() {
                   <div><label className={lc}>Relationship</label><input value={f.next_of_kin_relationship} onChange={upd('next_of_kin_relationship')} placeholder="e.g. Spouse" className={ic} /></div>
                   <div><label className={lc}>Phone</label><input value={f.next_of_kin_phone} onChange={upd('next_of_kin_phone')} placeholder="07XXXXXXXX" className={ic} /></div>
                 </div>
+                {/* Supporting document upload */}
+                <FileUploadBtn
+                  label="Supporting Document (National ID / Agreement)"
+                  accept=".pdf,image/*"
+                  uploaded={!!f.supporting_doc_url}
+                  uploading={uploadingDoc}
+                  onChange={handleDocUpload}
+                />
               </div>}
             </div>
             <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex gap-3 justify-end shrink-0">
@@ -194,12 +299,15 @@ export default function MembersPageClient() {
         </div>
       )}
 
+      {/* ── VIEW MODAL ── */}
       {showView && sel && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center"><User className="w-5 h-5 text-white" /></div>
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center overflow-hidden">
+                  {sel.photo_url ? <img src={sel.photo_url} alt="" className="w-full h-full object-cover" /> : <User className="w-5 h-5 text-white" />}
+                </div>
                 <div><h3 className="font-bold text-gray-900">{sel.full_name}</h3><p className="text-xs text-gray-500 font-mono">{sel.member_code}</p></div>
               </div>
               <button onClick={() => setShowView(false)} className="p-1.5 rounded-lg hover:bg-gray-100"><X className="w-4 h-4 text-gray-500" /></button>
@@ -210,6 +318,14 @@ export default function MembersPageClient() {
                   <div key={k} className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-500 mb-0.5">{k}</p><p className="font-semibold text-gray-900 capitalize">{v}</p></div>
                 ))}
               </div>
+              {sel.supporting_doc_url && (
+                <div className="mt-4">
+                  <p className="text-xs font-semibold text-gray-500 mb-2">Supporting Document</p>
+                  <a href={sel.supporting_doc_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-xl text-xs font-semibold hover:bg-blue-100 transition-colors">
+                    📄 View Document
+                  </a>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -1,7 +1,10 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { DollarSign, AlertTriangle, FileText, Clock, TrendingUp, Users, X, Loader2, AlertCircle, RefreshCw, BarChart3, Download } from 'lucide-react';
+import {
+  DollarSign, AlertTriangle, FileText, Clock, TrendingUp, Users,
+  X, Loader2, AlertCircle, BarChart3, Download, FileSpreadsheet, Printer,
+} from 'lucide-react';
 import { reports, members } from '@/lib/api';
 
 type ReportType = 'daily_financial' | 'portfolio_risk' | 'collection_sheet' | 'loan_aging' | 'disbursements' | 'member_statement';
@@ -17,6 +20,179 @@ const REPORT_DEFS = [
 
 const ugx = (n: number | string | null) => 'UGX ' + Number(n || 0).toLocaleString();
 const today = () => new Date().toISOString().split('T')[0];
+
+// ── CSV helper ───────────────────────────────────────────────────────────────
+function downloadCSV(filename: string, rows: string[][]): void {
+  const csv = rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── PDF helper (browser print) ───────────────────────────────────────────────
+function printReport(title: string, content: string): void {
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${title}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; color: #1a1a1a; font-size: 12px; }
+    h1 { color: #16a34a; font-size: 18px; margin-bottom: 4px; }
+    .sub { color: #6b7280; font-size: 11px; margin-bottom: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th { background: #f3f4f6; padding: 8px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; border-bottom: 2px solid #e5e7eb; }
+    td { padding: 7px 10px; border-bottom: 1px solid #f3f4f6; }
+    .card { display: inline-block; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 16px; margin: 6px; min-width: 160px; }
+    .card-label { font-size: 10px; color: #6b7280; margin-bottom: 2px; }
+    .card-value { font-size: 15px; font-weight: bold; }
+    .logo { font-size: 20px; font-weight: bold; color: #16a34a; }
+    @media print { button { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="logo">Kadaka Establishment Co. Ltd</div>
+  <h1>${title}</h1>
+  <div class="sub">Generated on ${new Date().toLocaleDateString('en-UG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+  ${content}
+  <script>window.onload = () => { window.print(); }<\/script>
+</body>
+</html>`;
+  const win = window.open('', '_blank');
+  if (win) { win.document.write(html); win.document.close(); }
+}
+
+// ── Report → CSV rows ────────────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toCSV(reportId: ReportType, data: any): string[][] {
+  if (reportId === 'daily_financial') {
+    const s = data.summary ?? data;
+    const rows: string[][] = [
+      ['Daily Financial Report'],
+      ['Date', data.date ?? ''],
+      [],
+      ['Item', 'Amount (UGX)'],
+      ['Opening Balance', s.opening_balance ?? s.openingBalance ?? ''],
+      ['Cash In', s.total_cash_in ?? s.cashIn ?? ''],
+      ['Expenses', s.total_expenses ?? s.expenses ?? ''],
+      ['Disbursements', s.total_disbursements ?? s.disbursements ?? ''],
+      ['Closing Balance', s.closing_balance ?? s.closingBalance ?? ''],
+    ];
+    if (data.expense_breakdown) {
+      rows.push([], ['Expense Breakdown'], ['Category', 'Amount']);
+      for (const e of data.expense_breakdown) rows.push([e.category, e.total]);
+    }
+    return rows;
+  }
+  if (reportId === 'portfolio_risk') {
+    const rows: string[][] = [
+      ['Portfolio at Risk Report'],
+      ['Generated', new Date().toLocaleDateString()],
+      [],
+      ['Metric', 'Value'],
+      ['Total Portfolio (UGX)', data.total_portfolio ?? ''],
+      ['Overdue Amount (UGX)', data.overdue_amount ?? ''],
+      ['PAR %', data.par_percentage ?? ''],
+      ['Overdue Loans Count', data.overdue_count ?? ''],
+      [],
+      ['Aging Bucket', 'Amount (UGX)', 'Count'],
+    ];
+    if (data.aging_buckets) {
+      for (const b of data.aging_buckets) rows.push([b.bucket, b.amount, b.count]);
+    }
+    return rows;
+  }
+  if (reportId === 'collection_sheet') {
+    const rows: string[][] = [
+      ['Daily Collection Sheet'],
+      ['Date', data.date ?? ''],
+      ['Collection Rate', `${data.collection_rate ?? 0}%`],
+      [],
+      ['Loan #', 'Member', 'Daily Payment', 'Paid Today', 'Status'],
+    ];
+    if (data.loans) {
+      for (const l of data.loans) rows.push([l.loan_number, l.member_name, l.daily_payment, l.paid_today ?? 0, l.status]);
+    }
+    return rows;
+  }
+  if (reportId === 'loan_aging') {
+    const rows: string[][] = [
+      ['Loan Aging Analysis'],
+      ['Generated', new Date().toLocaleDateString()],
+      [],
+      ['Loan #', 'Member', 'Amount', 'Balance', 'Start Date', 'End Date', 'Days Outstanding', 'Days Overdue'],
+    ];
+    const loans = data.loans ?? data.data ?? data;
+    if (Array.isArray(loans)) {
+      for (const l of loans) rows.push([l.loan_number, l.member_name, l.amount_applied ?? l.amount, l.balance_total ?? l.balance, l.start_date, l.end_date, l.days_outstanding ?? '', l.days_overdue ?? 0]);
+    }
+    return rows;
+  }
+  if (reportId === 'disbursements') {
+    const rows: string[][] = [
+      ['Disbursement Report'],
+      ['Period', `${data.date_from ?? ''} to ${data.date_to ?? ''}`],
+      ['Total Disbursed (UGX)', data.total_disbursed ?? ''],
+      [],
+      ['Loan #', 'Member', 'Amount (UGX)', 'Date', 'Method'],
+    ];
+    const loans = data.disbursements ?? data.loans ?? data.data ?? [];
+    if (Array.isArray(loans)) {
+      for (const l of loans) rows.push([l.loan_number, l.member_name, l.approved_amount ?? l.amount, l.disbursement_date, l.disbursement_method ?? l.method]);
+    }
+    return rows;
+  }
+  if (reportId === 'member_statement') {
+    const rows: string[][] = [
+      ['Member Statement'],
+      ['Member', data.member?.full_name ?? ''],
+      ['Member Code', data.member?.member_code ?? ''],
+      [],
+      ['LOANS'],
+      ['Loan #', 'Type', 'Amount Applied', 'Approved', 'Total Repayable', 'Balance', 'Status', 'Date'],
+    ];
+    if (data.loans) {
+      for (const l of data.loans) rows.push([l.loan_number, l.loan_type, l.amount_applied, l.approved_amount, l.total_repayable, l.balance_total, l.status, l.created_at?.slice(0,10)]);
+    }
+    rows.push([], ['PAYMENTS'], ['Date', 'Amount Paid', 'Method', 'Reference']);
+    if (data.payments) {
+      for (const p of data.payments) rows.push([p.payment_date, p.amount_paid, p.payment_method, p.transaction_reference ?? '']);
+    }
+    return rows;
+  }
+  return [['Report data'], [JSON.stringify(data)]];
+}
+
+// ── Report → HTML table ──────────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toHTML(reportId: ReportType, data: any): string {
+  const rows = toCSV(reportId, data);
+  let html = '<div>';
+  let inTable = false;
+  for (const row of rows) {
+    if (row.length === 0) {
+      if (inTable) { html += '</table>'; inTable = false; }
+      html += '<br>';
+      continue;
+    }
+    if (row.length === 1) {
+      if (inTable) { html += '</table>'; inTable = false; }
+      html += `<h3 style="margin:12px 0 4px;color:#374151">${row[0]}</h3>`;
+      continue;
+    }
+    if (!inTable) { html += '<table>'; inTable = true; }
+    const isHeader = rows.indexOf(row) === rows.findIndex(r => r.length > 1);
+    const tag = isHeader ? 'th' : 'td';
+    html += `<tr>${row.map(c => `<${tag}>${c}</${tag}>`).join('')}</tr>`;
+  }
+  if (inTable) html += '</table>';
+  html += '</div>';
+  return html;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function ReportsPageClient() {
   const [active, setActive] = useState<ReportType | null>(null);
@@ -46,10 +222,27 @@ export default function ReportsPageClient() {
       if (id === 'collection_sheet') result = await reports.collectionSheet(date);
       if (id === 'loan_aging')       result = await reports.loanAging();
       if (id === 'disbursements')    result = await reports.disbursements(dateFrom, dateTo);
-      if (id === 'member_statement') { if (!memberId) { setError('Please select a member'); setLoading(false); return; } result = await reports.memberStatement(memberId); }
+      if (id === 'member_statement') {
+        if (!memberId) { setError('Please select a member'); setLoading(false); return; }
+        result = await reports.memberStatement(memberId);
+      }
       setData(result); setShowPreview(true);
     } catch (e) { setError(e instanceof Error ? e.message : 'Failed to generate report'); }
     finally { setLoading(false); }
+  };
+
+  const handleCSV = () => {
+    if (!data || !active) return;
+    const rows = toCSV(active, data);
+    const def = REPORT_DEFS.find(r => r.id === active);
+    downloadCSV(`${def?.title?.replace(/\s+/g, '_') ?? 'report'}_${today()}.csv`, rows);
+  };
+
+  const handlePDF = () => {
+    if (!data || !active) return;
+    const def = REPORT_DEFS.find(r => r.id === active);
+    const htmlContent = toHTML(active, data);
+    printReport(def?.title ?? 'Report', htmlContent);
   };
 
   const def = REPORT_DEFS.find(r => r.id === active);
@@ -57,11 +250,10 @@ export default function ReportsPageClient() {
 
   return (
     <div className="space-y-6">
-      <div><h1 className="text-xl font-extrabold text-gray-900">Reports</h1><p className="text-sm text-gray-500 mt-0.5">Generate financial and portfolio reports</p></div>
+      <div><h1 className="text-xl font-extrabold text-gray-900">Reports</h1><p className="text-sm text-gray-500 mt-0.5">Generate and export financial & portfolio reports</p></div>
 
       {error && <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-700 flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" />{error}</div>}
 
-      {/* Date controls */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <h2 className="text-sm font-bold text-gray-800 mb-4">Report Parameters</h2>
         <div className="grid sm:grid-cols-3 gap-4">
@@ -87,7 +279,6 @@ export default function ReportsPageClient() {
         </div>
       </div>
 
-      {/* Report cards */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {REPORT_DEFS.map(r => {
           const Icon = r.icon;
@@ -108,7 +299,7 @@ export default function ReportsPageClient() {
         })}
       </div>
 
-      {/* Preview Modal */}
+      {/* ── Preview & Export Modal ── */}
       {showPreview && data && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
@@ -118,28 +309,55 @@ export default function ReportsPageClient() {
                 <h3 className="font-bold text-gray-900">{def?.title}</h3>
               </div>
               <div className="flex items-center gap-2">
-                <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
-                  <Download className="w-3.5 h-3.5" /> Export
+                {/* CSV Export */}
+                <button onClick={handleCSV}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-xl hover:bg-green-100 transition-colors">
+                  <FileSpreadsheet className="w-3.5 h-3.5" /> CSV
+                </button>
+                {/* PDF Export */}
+                <button onClick={handlePDF}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 transition-colors">
+                  <Printer className="w-3.5 h-3.5" /> PDF
                 </button>
                 <button onClick={() => { setShowPreview(false); setData(null); setActive(null); }} className="p-1.5 rounded-lg hover:bg-gray-100"><X className="w-4 h-4 text-gray-500" /></button>
               </div>
             </div>
-            <div className="overflow-y-auto p-6 flex-1">
-              <pre className="text-xs font-mono text-gray-700 bg-gray-50 rounded-xl p-4 overflow-x-auto whitespace-pre-wrap border border-gray-200">{JSON.stringify(data, null, 2)}</pre>
+            <div className="overflow-y-auto p-6 flex-1 space-y-4">
+              {/* Summary cards for key reports */}
               {active === 'daily_financial' && data.summary && (
-                <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-                  {[['Opening Balance', ugx(data.summary.opening_balance)], ['Cash In', ugx(data.summary.total_cash_in)], ['Expenses', ugx(data.summary.total_expenses)], ['Disbursements', ugx(data.summary.total_disbursements)], ['Closing Balance', ugx(data.summary.closing_balance)]].map(([k,v]) => (
-                    <div key={k} className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm"><p className="text-xs text-gray-500 mb-0.5">{k}</p><p className="font-bold text-gray-900">{v}</p></div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+                  {[
+                    ['Opening Balance', ugx(data.summary.opening_balance)],
+                    ['Cash In', ugx(data.summary.total_cash_in)],
+                    ['Expenses', ugx(data.summary.total_expenses)],
+                    ['Disbursements', ugx(data.summary.total_disbursements)],
+                    ['Closing Balance', ugx(data.summary.closing_balance)],
+                  ].map(([k,v]) => (
+                    <div key={k} className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm">
+                      <p className="text-xs text-gray-500 mb-0.5">{k}</p>
+                      <p className="font-bold text-gray-900">{v}</p>
+                    </div>
                   ))}
                 </div>
               )}
-              {active === 'portfolio_risk' && data.par_percentage !== undefined && (
-                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  {[['Total Portfolio', ugx(data.total_portfolio)], ['Overdue Amount', ugx(data.overdue_amount)], ['PAR %', `${data.par_percentage}%`], ['Overdue Loans', data.overdue_count ?? 0]].map(([k,v]) => (
-                    <div key={k} className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm"><p className="text-xs text-gray-500 mb-0.5">{k}</p><p className="font-bold text-gray-900">{v}</p></div>
+              {active === 'portfolio_risk' && (
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  {[
+                    ['Total Portfolio', ugx(data.total_portfolio)],
+                    ['Overdue Amount', ugx(data.overdue_amount)],
+                    ['PAR %', `${data.par_percentage ?? 0}%`],
+                    ['Overdue Loans', data.overdue_count ?? 0],
+                  ].map(([k,v]) => (
+                    <div key={k} className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm">
+                      <p className="text-xs text-gray-500 mb-0.5">{k}</p>
+                      <p className="font-bold text-gray-900">{v}</p>
+                    </div>
                   ))}
                 </div>
               )}
+              {/* Raw data */}
+              <pre className="text-xs font-mono text-gray-700 bg-gray-50 rounded-xl p-4 overflow-x-auto whitespace-pre-wrap border border-gray-200">{JSON.stringify(data, null, 2)}</pre>
+              <p className="text-xs text-gray-400 text-center">Use the CSV button to download as spreadsheet, or PDF to print / save as PDF.</p>
             </div>
           </div>
         </div>

@@ -4,14 +4,46 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, X, CheckCircle, BookOpen, Loader2, AlertCircle, RefreshCw, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import { cashbook } from '@/lib/api';
 
-type Tx = { id: string; transaction_date: string; transaction_time: string; type: 'cash_in' | 'expense' | 'disbursement'; category: string; description: string; amount: number; reference?: string };
+type Tx = {
+  id: string; transaction_date: string; transaction_time: string;
+  type: 'cash_in' | 'expense' | 'disbursement';
+  category: string; description: string; amount: number; reference?: string;
+};
 type Summary = { openingBalance: number; cashIn: number; expenses: number; disbursements: number; closingBalance: number };
 
 const ugx = (n: number | string | null) => 'UGX ' + Number(n || 0).toLocaleString();
-const TYPE_STYLE: Record<string, string> = { cash_in: 'bg-green-50 text-green-700 border-green-200', expense: 'bg-orange-50 text-orange-700 border-orange-200', disbursement: 'bg-red-50 text-red-700 border-red-200' };
+const TYPE_STYLE: Record<string, string> = {
+  cash_in: 'bg-green-50 text-green-700 border-green-200',
+  expense: 'bg-orange-50 text-orange-700 border-orange-200',
+  disbursement: 'bg-red-50 text-red-700 border-red-200',
+};
 const TYPE_LABEL: Record<string, string> = { cash_in: 'Cash In', expense: 'Expense', disbursement: 'Disbursement' };
 const Sk = () => <div className="animate-pulse bg-gray-100 rounded-xl h-10 w-full" />;
 const today = () => new Date().toISOString().split('T')[0];
+
+const inputCls = 'w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50 focus:bg-white';
+const labelCls = 'block text-xs font-semibold text-gray-700 mb-1.5';
+
+// ── Modal defined OUTSIDE component to prevent focus loss on re-render ────────
+function Modal({
+  title, onClose, children, footer,
+}: {
+  title: string; onClose: () => void; children: React.ReactNode; footer: React.ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <h3 className="font-bold text-gray-900">{title}</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100"><X className="w-4 h-4 text-gray-500" /></button>
+        </div>
+        <div className="overflow-y-auto p-6 flex-1 space-y-4">{children}</div>
+        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex gap-3 justify-end shrink-0">{footer}</div>
+      </div>
+    </div>
+  );
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function CashbookPageClient() {
   const [date,    setDate]    = useState(today());
@@ -21,21 +53,18 @@ export default function CashbookPageClient() {
   const [error,   setError]   = useState('');
   const [toast,   setToast]   = useState('');
 
-  // modal
-  const [showEntry, setShowEntry] = useState(false);
-  const [showBal,   setShowBal]   = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [formErr,  setFormErr]  = useState('');
+  const [showEntry,   setShowEntry]   = useState(false);
+  const [showBal,     setShowBal]     = useState(false);
+  const [submitting,  setSubmitting]  = useState(false);
+  const [formErr,     setFormErr]     = useState('');
 
-  // entry form
-  const [txType,  setTxType]  = useState<'cash_in' | 'expense'>('cash_in');
-  const [category, setCategory] = useState('');
-  const [desc,    setDesc]    = useState('');
-  const [amtStr,  setAmtStr]  = useState('');
-  const [txTime,  setTxTime]  = useState(() => new Date().toTimeString().slice(0, 5));
-  const [txRef,   setTxRef]   = useState('');
+  const [txType,    setTxType]    = useState<'cash_in' | 'expense'>('cash_in');
+  const [category,  setCategory]  = useState('');
+  const [desc,      setDesc]      = useState('');
+  const [amtStr,    setAmtStr]    = useState('');
+  const [txTime,    setTxTime]    = useState(() => new Date().toTimeString().slice(0, 5));
+  const [txRef,     setTxRef]     = useState('');
 
-  // opening balance form
   const [balDate, setBalDate] = useState(today());
   const [balAmt,  setBalAmt]  = useState('');
 
@@ -84,29 +113,12 @@ export default function CashbookPageClient() {
     finally { setSubmitting(false); }
   };
 
-  // running balance
   const withBalance = txList.reduce<(Tx & { runningBal: number })[]>((acc, tx) => {
     const prev = acc.length > 0 ? acc[acc.length - 1].runningBal : Number(summary?.openingBalance ?? 0);
     const delta = tx.type === 'cash_in' ? Number(tx.amount) : -Number(tx.amount);
     acc.push({ ...tx, runningBal: prev + delta });
     return acc;
   }, []);
-
-  const inputCls = 'w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50 focus:bg-white';
-  const labelCls = 'block text-xs font-semibold text-gray-700 mb-1.5';
-
-  const Modal = ({ title, onClose, children, footer }: { title: string; onClose: () => void; children: React.ReactNode; footer: React.ReactNode }) => (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-          <h3 className="font-bold text-gray-900">{title}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100"><X className="w-4 h-4 text-gray-500" /></button>
-        </div>
-        <div className="overflow-y-auto p-6 flex-1 space-y-4">{children}</div>
-        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex gap-3 justify-end shrink-0">{footer}</div>
-      </div>
-    </div>
-  );
 
   return (
     <div className="space-y-6">
@@ -116,7 +128,6 @@ export default function CashbookPageClient() {
         </div>
       )}
 
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div><h1 className="text-xl font-extrabold text-gray-900">Cashbook</h1><p className="text-sm text-gray-500 mt-0.5">Daily transaction ledger</p></div>
         <div className="flex items-center gap-2">
@@ -130,13 +141,11 @@ export default function CashbookPageClient() {
 
       {error && <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-700 flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" />{error}</div>}
 
-      {/* Auto-record info */}
       <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-100 rounded-2xl text-sm text-blue-800">
         <Info className="w-4 h-4 shrink-0 mt-0.5 text-blue-600" />
         <span><span className="font-semibold">Automatic entries:</span> Loan repayments appear here as Cash In, and loan disbursements appear as Disbursements — no manual recording needed for these.</span>
       </div>
 
-      {/* Date navigator */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center justify-between gap-4">
         <button onClick={() => shiftDate(-1)} className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-gray-600"><ChevronLeft className="w-5 h-5" /></button>
         <div className="flex items-center gap-3">
@@ -146,7 +155,6 @@ export default function CashbookPageClient() {
         <button onClick={() => shiftDate(1)} disabled={date >= today()} className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-gray-600 disabled:opacity-30"><ChevronRight className="w-5 h-5" /></button>
       </div>
 
-      {/* Summary cards */}
       {summary && (
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           {[
@@ -164,14 +172,12 @@ export default function CashbookPageClient() {
         </div>
       )}
 
-      {/* Formula */}
       {summary && (
         <div className="bg-white rounded-xl border border-gray-100 p-3 text-xs text-gray-500 text-center font-mono">
           Closing = Opening ({ugx(summary.openingBalance)}) + Cash In ({ugx(summary.cashIn)}) − Expenses ({ugx(summary.expenses)}) − Disbursements ({ugx(summary.disbursements)}) = <span className="font-bold text-blue-700">{ugx(summary.closingBalance)}</span>
         </div>
       )}
 
-      {/* Transactions table */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
           <BookOpen className="w-4 h-4 text-green-600" />
@@ -233,7 +239,6 @@ export default function CashbookPageClient() {
                   className={`py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${txType === v ? ac : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}>{l}</button>
               ))}
             </div>
-            <p className="text-xs text-gray-400 mt-1.5">Note: Disbursements are recorded automatically when a loan is disbursed.</p>
           </div>
           <div>
             <label className={labelCls}>Time <span className="text-red-500">*</span></label>
@@ -242,7 +247,7 @@ export default function CashbookPageClient() {
           <div>
             <label className={labelCls}>Category <span className="text-red-500">*</span></label>
             <input type="text" value={category} onChange={e => setCategory(e.target.value)} list="cat-list" placeholder="e.g. Fuel, Allowance, Rent…" className={inputCls} />
-            <datalist id="cat-list">{['Fuel', 'Allowance', 'Rent', 'Salary', 'Office Supplies', 'Internet', 'Other'].map(c => <option key={c} value={c} />)}</datalist>
+            <datalist id="cat-list">{['Fuel', 'Allowance', 'Rent', 'Salary', 'Office Supplies', 'Internet', 'Banking', 'Other'].map(c => <option key={c} value={c} />)}</datalist>
           </div>
           <div>
             <label className={labelCls}>Description <span className="text-red-500">*</span></label>
@@ -278,7 +283,7 @@ export default function CashbookPageClient() {
             <label className={labelCls}>Opening Balance (UGX) <span className="text-red-500">*</span></label>
             <input type="number" value={balAmt} onChange={e => setBalAmt(e.target.value)} min={0} step={1000} placeholder="e.g. 1245000" className={inputCls} />
           </div>
-          <p className="text-xs text-gray-400">This sets the starting cash balance for the selected date. If a balance already exists for that date, it will be updated.</p>
+          <p className="text-xs text-gray-400">This sets the starting cash balance for the selected date.</p>
         </Modal>
       )}
     </div>

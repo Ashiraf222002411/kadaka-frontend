@@ -28,6 +28,25 @@ async function apiFetch<T = unknown>(
   return data as T;
 }
 
+// ── File upload (multipart) ──────────────────────────────────────────────────
+export async function uploadFile(file: File): Promise<{ url: string; filename: string; size: number }> {
+  const token = getToken();
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE}/api/uploads`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string }).error ?? 'Upload failed');
+  return data as { url: string; filename: string; size: number };
+}
+
 // ── Auth ────────────────────────────────────────────────────────────────────
 export const auth = {
   login: (email: string, password: string) =>
@@ -42,15 +61,9 @@ export const auth = {
 export const dashboard = {
   getStats: () =>
     apiFetch<{
-      totalMembers: number;
-      activeLoans: number;
-      totalPortfolio: number;
-      collectionsToday: number;
-      collectionsMTD: number;
-      overdueLoans: number;
-      portfolioAtRisk: number;
-      disbursementsToday: number;
-      pendingApprovals?: number;
+      totalMembers: number; activeLoans: number; totalPortfolio: number;
+      collectionsToday: number; collectionsMTD: number; overdueLoans: number;
+      portfolioAtRisk: number; disbursementsToday: number; pendingApprovals?: number;
     }>('/api/dashboard/stats'),
   getRecentLoans: () => apiFetch<{ data?: unknown[]; rows?: unknown[] }>('/api/dashboard/recent-loans'),
   getRecentPayments: () => apiFetch<{ data?: unknown[]; rows?: unknown[] }>('/api/dashboard/recent-payments'),
@@ -62,9 +75,7 @@ export const dashboard = {
 export const members = {
   getAll: (params?: Record<string, string | number>) => {
     const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
-    return apiFetch<{ data: unknown[]; total: number; page: number; limit: number }>(
-      `/api/members${qs}`,
-    );
+    return apiFetch<{ data: unknown[]; total: number; page: number; limit: number }>(`/api/members${qs}`);
   },
   getById: (id: string) => apiFetch(`/api/members/${id}`),
   create: (data: Record<string, unknown>) =>
@@ -76,8 +87,7 @@ export const members = {
 
 // ── Groups ──────────────────────────────────────────────────────────────────
 export const groups = {
-  getAll: () =>
-    apiFetch<unknown[]>('/api/groups'),
+  getAll: () => apiFetch<unknown[]>('/api/groups'),
   getById: (id: string) => apiFetch(`/api/groups/${id}`),
   create: (data: Record<string, unknown>) =>
     apiFetch('/api/groups', { method: 'POST', body: JSON.stringify(data) }),
@@ -90,9 +100,7 @@ export const groups = {
 export const loans = {
   getAll: (params?: Record<string, string | number>) => {
     const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
-    return apiFetch<{ data: unknown[]; total: number; page: number; limit: number }>(
-      `/api/loans${qs}`,
-    );
+    return apiFetch<{ data: unknown[]; total: number; page: number; limit: number }>(`/api/loans${qs}`);
   },
   getActive: () => apiFetch<unknown[]>('/api/loans/active'),
   getById: (id: string) => apiFetch(`/api/loans/${id}`),
@@ -103,31 +111,18 @@ export const loans = {
       ...(loanPeriod ? { loan_period: String(loanPeriod) } : {}),
     });
     return apiFetch<{
-      principal: number;
-      interestRate: number;
-      loanPeriod: number;
-      totalInterest: number;
-      totalRepayable: number;
-      dailyPayment: number;
+      principal: number; interestRate: number; loanPeriod: number;
+      totalInterest: number; totalRepayable: number; dailyPayment: number;
     }>(`/api/loans/preview?${qs}`);
   },
   create: (data: Record<string, unknown>) =>
     apiFetch('/api/loans', { method: 'POST', body: JSON.stringify(data) }),
   approve: (id: string, approvedAmount: number) =>
-    apiFetch(`/api/loans/${id}/approve`, {
-      method: 'PATCH',
-      body: JSON.stringify({ approved_amount: approvedAmount }),
-    }),
+    apiFetch(`/api/loans/${id}/approve`, { method: 'PATCH', body: JSON.stringify({ approved_amount: approvedAmount }) }),
   reject: (id: string, reason: string) =>
-    apiFetch(`/api/loans/${id}/reject`, {
-      method: 'PATCH',
-      body: JSON.stringify({ rejection_reason: reason }),
-    }),
+    apiFetch(`/api/loans/${id}/reject`, { method: 'PATCH', body: JSON.stringify({ rejection_reason: reason }) }),
   disburse: (id: string, method = 'cash') =>
-    apiFetch(`/api/loans/${id}/disburse`, {
-      method: 'PATCH',
-      body: JSON.stringify({ disbursement_method: method }),
-    }),
+    apiFetch(`/api/loans/${id}/disburse`, { method: 'PATCH', body: JSON.stringify({ disbursement_method: method }) }),
   applyPenalty: (id: string) =>
     apiFetch(`/api/loans/${id}/penalty`, { method: 'PATCH' }),
 };
@@ -136,19 +131,13 @@ export const loans = {
 export const payments = {
   getAll: (params?: Record<string, string | number>) => {
     const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
-    return apiFetch<{ data: unknown[]; total: number; page: number; limit: number }>(
-      `/api/payments${qs}`,
-    );
+    return apiFetch<{ data: unknown[]; total: number; page: number; limit: number }>(`/api/payments${qs}`);
   },
   getById: (id: string) => apiFetch(`/api/payments/${id}`),
   todaySummary: () => apiFetch('/api/payments/today-summary'),
   create: (data: {
-    loan_id: string;
-    amount_paid: number;
-    payment_date?: string;
-    payment_method?: string;
-    transaction_reference?: string;
-    notes?: string;
+    loan_id: string; amount_paid: number; payment_date?: string;
+    payment_method?: string; transaction_reference?: string; notes?: string;
   }) => apiFetch('/api/payments', { method: 'POST', body: JSON.stringify(data) }),
 };
 
@@ -157,20 +146,25 @@ export const cashbook = {
   getByDate: (date: string) => apiFetch(`/api/cashbook?date=${date}`),
   getSummary: (date: string) => apiFetch(`/api/cashbook/summary?date=${date}`),
   create: (data: {
-    transaction_date: string;
-    transaction_time: string;
-    type: 'cash_in' | 'expense';
-    category: string;
-    description: string;
-    amount: number;
-    reference?: string;
+    transaction_date: string; transaction_time: string; type: 'cash_in' | 'expense';
+    category: string; description: string; amount: number; reference?: string;
   }) => apiFetch('/api/cashbook', { method: 'POST', body: JSON.stringify(data) }),
   setOpeningBalance: (balance_date: string, opening_balance: number) =>
-    apiFetch('/api/cashbook/opening-balance', {
-      method: 'POST',
-      body: JSON.stringify({ balance_date, opening_balance }),
-    }),
+    apiFetch('/api/cashbook/opening-balance', { method: 'POST', body: JSON.stringify({ balance_date, opening_balance }) }),
   remove: (id: string) => apiFetch(`/api/cashbook/${id}`, { method: 'DELETE' }),
+};
+
+// ── Documents ────────────────────────────────────────────────────────────────
+export const documents = {
+  getAll: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return apiFetch<{ data: unknown[]; total: number }>(`/api/documents${qs}`);
+  },
+  create: (data: {
+    name: string; category: string; related_to?: string; related_id?: string;
+    file_url: string; file_size?: number; file_type?: string; expiry_date?: string;
+  }) => apiFetch('/api/documents', { method: 'POST', body: JSON.stringify(data) }),
+  remove: (id: string) => apiFetch(`/api/documents/${id}`, { method: 'DELETE' }),
 };
 
 // ── Users ────────────────────────────────────────────────────────────────────
@@ -181,33 +175,25 @@ export const users = {
   update: (id: string, data: { full_name?: string; role?: string; is_active?: boolean }) =>
     apiFetch(`/api/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   resetPassword: (id: string, new_password: string) =>
-    apiFetch(`/api/users/${id}/reset-password`, {
-      method: 'PATCH',
-      body: JSON.stringify({ new_password }),
-    }),
+    apiFetch(`/api/users/${id}/reset-password`, { method: 'PATCH', body: JSON.stringify({ new_password }) }),
 };
 
 // ── Audit Logs ───────────────────────────────────────────────────────────────
 export const auditLogs = {
   getAll: (params?: Record<string, string>) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-    return apiFetch<{ data: unknown[]; total: number; page: number; limit: number }>(
-      `/api/audit-logs${qs}`,
-    );
+    return apiFetch<{ data: unknown[]; total: number; page: number; limit: number }>(`/api/audit-logs${qs}`);
   },
   getActions: () => apiFetch<string[]>('/api/audit-logs/actions'),
 };
 
 // ── Reports ─────────────────────────────────────────────────────────────────
 export const reports = {
-  dailyFinancial: (date: string) =>
-    apiFetch(`/api/reports/daily-financial?date=${date}`),
+  dailyFinancial: (date: string) => apiFetch(`/api/reports/daily-financial?date=${date}`),
   portfolioRisk: () => apiFetch('/api/reports/portfolio-risk'),
-  collectionSheet: (date: string) =>
-    apiFetch(`/api/reports/collection-sheet?date=${date}`),
+  collectionSheet: (date: string) => apiFetch(`/api/reports/collection-sheet?date=${date}`),
   loanAging: () => apiFetch('/api/reports/loan-aging'),
   disbursements: (dateFrom: string, dateTo: string) =>
     apiFetch(`/api/reports/disbursements?date_from=${dateFrom}&date_to=${dateTo}`),
-  memberStatement: (memberId: string) =>
-    apiFetch(`/api/reports/member-statement/${memberId}`),
+  memberStatement: (memberId: string) => apiFetch(`/api/reports/member-statement/${memberId}`),
 };
