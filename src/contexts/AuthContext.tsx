@@ -8,15 +8,18 @@ import { auth as authApi } from '@/lib/api';
 interface AuthContextValue {
   user: AuthUser | null;
   isLoading: boolean;
+  requirePasswordChange: boolean;
   login: (email: string, password: string) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser]                         = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading]               = useState(true);
+  const [requirePasswordChange, setRequirePasswordChange] = useState(false);
   const router = useRouter();
 
   // On mount, hydrate user from stored token
@@ -24,7 +27,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const token = getToken();
     if (token) {
       const decoded = decodeToken(token);
-      // Check if token is expired
       if (decoded && decoded.exp && decoded.exp * 1000 > Date.now()) {
         setUser(decoded);
       } else {
@@ -39,17 +41,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(data.token);
     const decoded = decodeToken(data.token);
     setUser(decoded);
+
+    if (data.requirePasswordChange) {
+      // Stay on the login page — the page component will show the change-password modal
+      setRequirePasswordChange(true);
+    } else {
+      setRequirePasswordChange(false);
+      router.push('/dashboard');
+    }
+  }, [router]);
+
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    const data = await authApi.changePassword(currentPassword, newPassword);
+    // Replace token with the fresh one (no longer has temporary flag in DB)
+    setToken(data.token);
+    const decoded = decodeToken(data.token);
+    setUser(decoded);
+    setRequirePasswordChange(false);
     router.push('/dashboard');
   }, [router]);
 
   const logout = useCallback(() => {
     clearToken();
     setUser(null);
+    setRequirePasswordChange(false);
     router.push('/login');
   }, [router]);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, requirePasswordChange, login, changePassword, logout }}>
       {children}
     </AuthContext.Provider>
   );

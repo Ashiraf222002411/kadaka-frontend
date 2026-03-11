@@ -18,6 +18,7 @@ export interface AuthUser {
   email: string;
   role: string;
   full_name: string;
+  branch_id: string;
   iat?: number;
   exp?: number;
 }

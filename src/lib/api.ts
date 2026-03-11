@@ -50,9 +50,21 @@ export async function uploadFile(file: File): Promise<{ url: string; filename: s
 // ── Auth ────────────────────────────────────────────────────────────────────
 export const auth = {
   login: (email: string, password: string) =>
-    apiFetch<{ token: string; user: { id: string; email: string; full_name: string; role: string } }>(
+    apiFetch<{
+      token: string;
+      requirePasswordChange?: boolean;
+      user: { id: string; email: string; full_name: string; role: string; branch_id: string };
+    }>(
       '/api/auth/login',
       { method: 'POST', body: JSON.stringify({ email, password }) },
+    ),
+  changePassword: (current_password: string, new_password: string) =>
+    apiFetch<{
+      token: string;
+      user: { id: string; email: string; full_name: string; role: string; branch_id: string };
+    }>(
+      '/api/auth/change-password',
+      { method: 'POST', body: JSON.stringify({ current_password, new_password }) },
     ),
   getMe: () => apiFetch('/api/auth/me'),
 };
