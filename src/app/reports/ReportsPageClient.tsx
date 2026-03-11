@@ -69,20 +69,36 @@ function printReport(title: string, content: string): void {
 function toCSV(reportId: ReportType, data: any): string[][] {
   if (reportId === 'daily_financial') {
     const s = data.summary ?? data;
+    const cashInTotal   = s.total_cash_in    ?? s.cashIn?.grandTotal   ?? s.cashIn?.total   ?? 0;
+    const expensesTotal = s.total_expenses   ?? s.expenses?.total      ?? 0;
+    const disbTotal     = s.total_disbursements ?? s.disbursements?.total ?? 0;
+    const openBal       = s.opening_balance  ?? s.openingBalance       ?? 0;
+    const closeBal      = s.closing_balance  ?? s.closingBalance       ?? 0;
     const rows: string[][] = [
       ['Daily Financial Report'],
       ['Date', data.date ?? ''],
       [],
       ['Item', 'Amount (UGX)'],
-      ['Opening Balance', s.opening_balance ?? s.openingBalance ?? ''],
-      ['Cash In', s.total_cash_in ?? s.cashIn ?? ''],
-      ['Expenses', s.total_expenses ?? s.expenses ?? ''],
-      ['Disbursements', s.total_disbursements ?? s.disbursements ?? ''],
-      ['Closing Balance', s.closing_balance ?? s.closingBalance ?? ''],
+      ['Opening Balance',  String(openBal)],
+      ['Cash In',          String(cashInTotal)],
+      ['Expenses',         String(expensesTotal)],
+      ['Disbursements',    String(disbTotal)],
+      ['Closing Balance',  String(closeBal)],
     ];
-    if (data.expense_breakdown) {
-      rows.push([], ['Expense Breakdown'], ['Category', 'Amount']);
-      for (const e of data.expense_breakdown) rows.push([e.category, e.total]);
+    const cashTxns = data.cashIn?.transactions ?? [];
+    if (cashTxns.length) {
+      rows.push([], ['Cash In Transactions'], ['Description', 'Amount', 'Reference']);
+      for (const t of cashTxns) rows.push([t.description, t.amount, t.reference ?? '']);
+    }
+    const expTxns = data.expenses?.transactions ?? [];
+    if (expTxns.length) {
+      rows.push([], ['Expense Transactions'], ['Category', 'Description', 'Amount']);
+      for (const t of expTxns) rows.push([t.category, t.description, t.amount]);
+    }
+    const disbTxns = data.disbursements?.transactions ?? [];
+    if (disbTxns.length) {
+      rows.push([], ['Disbursements'], ['Description', 'Amount', 'Reference']);
+      for (const t of disbTxns) rows.push([t.description, t.amount, t.reference ?? '']);
     }
     return rows;
   }
@@ -324,14 +340,14 @@ export default function ReportsPageClient() {
             </div>
             <div className="overflow-y-auto p-6 flex-1 space-y-4">
               {/* Summary cards for key reports */}
-              {active === 'daily_financial' && data.summary && (
+              {active === 'daily_financial' && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                   {[
-                    ['Opening Balance', ugx(data.summary.opening_balance)],
-                    ['Cash In', ugx(data.summary.total_cash_in)],
-                    ['Expenses', ugx(data.summary.total_expenses)],
-                    ['Disbursements', ugx(data.summary.total_disbursements)],
-                    ['Closing Balance', ugx(data.summary.closing_balance)],
+                    ['Opening Balance', ugx(data.summary?.opening_balance ?? data.openingBalance)],
+                    ['Cash In',         ugx(data.summary?.total_cash_in    ?? data.cashIn?.grandTotal ?? data.cashIn?.total)],
+                    ['Expenses',        ugx(data.summary?.total_expenses   ?? data.expenses?.total)],
+                    ['Disbursements',   ugx(data.summary?.total_disbursements ?? data.disbursements?.total)],
+                    ['Closing Balance', ugx(data.summary?.closing_balance  ?? data.closingBalance)],
                   ].map(([k,v]) => (
                     <div key={k} className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm">
                       <p className="text-xs text-gray-500 mb-0.5">{k}</p>

@@ -172,14 +172,21 @@ export default function LoansPageClient() {
 
   useEffect(() => { fetchLoans(); fetchMembers(); }, [fetchLoans, fetchMembers]);
 
+  // Debounce preview fetches to avoid race conditions from rapid typing
   useEffect(() => {
     if (!amount || Number(amount) < 1000) { setPreview(null); return; }
-    loans.preview(Number(amount)).then(setPreview).catch(() => {});
+    const id = setTimeout(() => {
+      loans.preview(Number(amount)).then(setPreview).catch(() => {});
+    }, 400);
+    return () => clearTimeout(id);
   }, [amount]);
 
   useEffect(() => {
     if (!approveAmt || Number(approveAmt) < 1000) { setAppPreview(null); return; }
-    loans.preview(Number(approveAmt)).then(setAppPreview).catch(() => {});
+    const id = setTimeout(() => {
+      loans.preview(Number(approveAmt)).then(setAppPreview).catch(() => {});
+    }, 400);
+    return () => clearTimeout(id);
   }, [approveAmt]);
 
   const filtered = loanList.filter(l => {

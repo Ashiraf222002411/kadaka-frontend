@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, X, CheckCircle, BookOpen, Loader2, AlertCircle, RefreshCw, ChevronLeft, ChevronRight, Info } from 'lucide-react';
+import Link from 'next/link';
+import { Plus, X, CheckCircle, BookOpen, Loader2, AlertCircle, RefreshCw, ChevronLeft, ChevronRight, Info, Lock } from 'lucide-react';
 import { cashbook } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 type Tx = {
   id: string; transaction_date: string; transaction_time: string;
@@ -43,9 +45,30 @@ function Modal({
     </div>
   );
 }
-// ─────────────────────────────────────────────────────────────────────────────
 
-export default function CashbookPageClient() {
+// ── Access denied screen for loan officers ────────────────────────────────────
+function AccessDenied() {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+      <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center mb-6">
+        <Lock className="w-8 h-8 text-red-500" />
+      </div>
+      <h2 className="text-xl font-extrabold text-gray-900 mb-2">Access Restricted</h2>
+      <p className="text-sm text-gray-500 mb-6 max-w-sm">
+        The Cashbook is only accessible to Branch Managers. Please contact your manager for cashbook-related queries.
+      </p>
+      <Link
+        href="/dashboard"
+        className="inline-flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-xl transition-colors"
+      >
+        Back to Dashboard
+      </Link>
+    </div>
+  );
+}
+
+// ── Main cashbook content (all hooks here — no conditional calls) ─────────────
+function CashbookContent() {
   const [date,    setDate]    = useState(today());
   const [txList,  setTxList]  = useState<Tx[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -288,4 +311,12 @@ export default function CashbookPageClient() {
       )}
     </div>
   );
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Exported wrapper — role check BEFORE rendering CashbookContent ────────────
+export default function CashbookPageClient() {
+  const { user } = useAuth();
+  if (user && user.role === 'loan_officer') return <AccessDenied />; // accountant & branch_manager allowed
+  return <CashbookContent />;
 }

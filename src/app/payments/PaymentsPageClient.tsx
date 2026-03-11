@@ -1,11 +1,25 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, X, CheckCircle, BookOpen, Loader2, AlertCircle, RefreshCw, Smartphone, Banknote, Building2 } from 'lucide-react';
+import { Plus, Search, X, CheckCircle, BookOpen, Loader2, AlertCircle, RefreshCw, Smartphone, Banknote, Building2, Printer } from 'lucide-react';
 import { payments, loans } from '@/lib/api';
 
-type Payment = { id: string; receipt_number: string; loan_number: string; member_name: string; group_name: string; amount_paid: number; interest_portion: number; principal_portion: number; balance_total_after: number; payment_method: string; payment_date: string };
-type ActiveLoan = { id: string; loan_number: string; member_name: string; group_name: string; balance_interest: number; balance_principal: number; balance_total: number };
+type Payment = {
+  id: string; receipt_number: string; loan_number: string; member_name: string;
+  group_name: string; amount_paid: number; interest_portion: number;
+  principal_portion: number; balance_total_after: number; payment_method: string; payment_date: string;
+};
+type ActiveLoan = {
+  id: string; loan_number: string; member_name: string; group_name: string;
+  balance_interest: number; balance_principal: number; balance_total: number;
+};
+type ReceiptData = {
+  receipt_number: string; payment_date: string; created_at: string;
+  amount_paid: number; interest_portion: number; principal_portion: number;
+  balance_total_after: number; balance_interest_after: number; balance_principal_after: number;
+  payment_method: string; transaction_reference: string | null; loan_cleared: boolean;
+  member_name: string; loan_number: string; group_name: string;
+};
 
 const ugx  = (n: number | string | null) => 'UGX ' + Number(n || 0).toLocaleString();
 const Sk   = () => <div className="animate-pulse bg-gray-100 rounded-xl h-10 w-full" />;
@@ -16,6 +30,198 @@ const METHOD_MAP: Record<string, { label: string; color: string; Icon: React.FC<
   mobile_money:  { label: 'Mobile Money', color: 'bg-blue-50 text-blue-700 border-blue-200',    Icon: Smartphone },
   bank_transfer: { label: 'Bank',         color: 'bg-purple-50 text-purple-700 border-purple-200', Icon: Building2 },
 };
+
+// ── POS Receipt Modal (defined outside to prevent focus loss) ─────────────────
+function ReceiptModal({ receipt, onClose }: { receipt: ReceiptData; onClose: () => void }) {
+  const printReceipt = () => window.print();
+
+  const fmt = (d: string) => {
+    const dt = new Date(d);
+    return dt.toLocaleDateString('en-UG', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const fmtTime = (d: string) => {
+    const dt = new Date(d);
+    return dt.toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit', hour12: false });
+  };
+
+  const methodLabel = METHOD_MAP[receipt.payment_method]?.label ?? receipt.payment_method;
+
+  return (
+    <>
+      {/* Print-only styles — use visibility (not display:none) so child can override parent */}
+      <style>{`
+        @media print {
+          * { visibility: hidden !important; }
+          .receipt-print-area,
+          .receipt-print-area * { visibility: visible !important; }
+          .receipt-print-area {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            padding: 16px !important;
+            background: white !important;
+          }
+        }
+      `}</style>
+
+      {/* Modal overlay — no print:hidden here! display:none prevents children from being visible.
+          The * { visibility:hidden } rule already hides the backdrop; receipt-print-area overrides it. */}
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+          {/* Modal header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <h3 className="font-bold text-gray-900 text-sm">Payment Receipt</h3>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100">
+              <X className="w-4 h-4 text-gray-500" />
+            </button>
+          </div>
+
+          {/* Scrollable receipt area */}
+          <div className="overflow-y-auto max-h-[70vh] px-5 py-4">
+            {/* POS receipt styled div */}
+            <div className="receipt-print-area font-mono text-xs bg-white" style={{ width: '100%' }}>
+              {/* Header */}
+              <div className="text-center mb-3">
+                <div className="text-sm font-extrabold tracking-tight">KADAKA ESTABLISHMENT CO.</div>
+                <div className="text-[10px] text-gray-500">Lending Management System</div>
+                <div className="text-[10px] text-gray-400">www.kadaka.ug | Tel: +256-XXX-XXX</div>
+              </div>
+
+              <div className="border-t border-dashed border-gray-300 my-2" />
+
+              {/* Receipt meta */}
+              <div className="space-y-0.5 text-[11px]">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Receipt #</span>
+                  <span className="font-bold text-gray-900">{receipt.receipt_number}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Date</span>
+                  <span className="font-semibold">{fmt(receipt.payment_date)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Time</span>
+                  <span className="font-semibold">{fmtTime(receipt.created_at)}</span>
+                </div>
+              </div>
+
+              <div className="border-t border-dashed border-gray-300 my-2" />
+
+              {/* Borrower info */}
+              <div className="space-y-0.5 text-[11px]">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Member</span>
+                  <span className="font-bold text-gray-900">{receipt.member_name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Loan #</span>
+                  <span className="font-semibold">{receipt.loan_number}</span>
+                </div>
+                {receipt.group_name && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Group</span>
+                    <span className="font-semibold">{receipt.group_name}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-dashed border-gray-300 my-2" />
+
+              {/* Payment breakdown */}
+              <div className="space-y-0.5 text-[11px]">
+                <div className="flex justify-between font-extrabold text-[13px] text-green-700">
+                  <span>AMOUNT PAID</span>
+                  <span>{ugx(receipt.amount_paid)}</span>
+                </div>
+                <div className="flex justify-between text-gray-600">
+                  <span>└ Interest portion</span>
+                  <span>{ugx(receipt.interest_portion)}</span>
+                </div>
+                <div className="flex justify-between text-gray-600">
+                  <span>└ Principal portion</span>
+                  <span>{ugx(receipt.principal_portion)}</span>
+                </div>
+              </div>
+
+              <div className="border-t border-dashed border-gray-300 my-2" />
+
+              {/* Remaining balance */}
+              <div className="space-y-0.5 text-[11px]">
+                <div className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Remaining Balance</div>
+                <div className="flex justify-between font-extrabold text-gray-900">
+                  <span>Total</span>
+                  <span className={receipt.loan_cleared ? 'text-green-700' : ''}>{ugx(receipt.balance_total_after)}</span>
+                </div>
+                <div className="flex justify-between text-gray-600">
+                  <span>└ Interest</span>
+                  <span>{ugx(receipt.balance_interest_after)}</span>
+                </div>
+                <div className="flex justify-between text-gray-600">
+                  <span>└ Principal</span>
+                  <span>{ugx(receipt.balance_principal_after)}</span>
+                </div>
+              </div>
+
+              <div className="border-t border-dashed border-gray-300 my-2" />
+
+              {/* Method */}
+              <div className="space-y-0.5 text-[11px]">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Method</span>
+                  <span className="font-semibold capitalize">{methodLabel}</span>
+                </div>
+                {receipt.transaction_reference && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Reference</span>
+                    <span className="font-semibold">{receipt.transaction_reference}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Loan cleared banner */}
+              {receipt.loan_cleared && (
+                <>
+                  <div className="border-t border-dashed border-gray-300 my-2" />
+                  <div className="text-center py-1 bg-green-50 rounded-lg">
+                    <div className="text-sm font-extrabold text-green-700">✓ LOAN FULLY CLEARED!</div>
+                    <div className="text-[10px] text-green-600">Congratulations on completing your loan</div>
+                  </div>
+                </>
+              )}
+
+              <div className="border-t border-dashed border-gray-300 my-2" />
+
+              {/* Footer */}
+              <div className="text-center text-[10px] text-gray-400 space-y-0.5">
+                <div className="font-semibold text-gray-600">Thank you for your payment!</div>
+                <div>Please keep this receipt for your records.</div>
+                <div className="mt-1">Kadaka Establishment Co. (U) LTD</div>
+                <div>© {new Date().getFullYear()} All rights reserved</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer buttons */}
+          <div className="px-5 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex gap-3">
+            <button
+              onClick={printReceipt}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 border border-gray-200 bg-white hover:bg-gray-50 rounded-xl transition-colors"
+            >
+              <Printer className="w-4 h-4" /> Print Receipt
+            </button>
+            <button
+              onClick={onClose}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-xl transition-colors"
+            >
+              <CheckCircle className="w-4 h-4" /> Done
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
 
 export default function PaymentsPageClient() {
   const [payList,  setPayList]  = useState<Payment[]>([]);
@@ -34,6 +240,9 @@ export default function PaymentsPageClient() {
   const [ref,      setRef]      = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formErr,  setFormErr]  = useState('');
+
+  // receipt state
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
@@ -67,16 +276,46 @@ export default function PaymentsPageClient() {
   const resetForm = () => { setLoanId(''); setAmtStr(''); setPayDate(today()); setMethod('cash'); setRef(''); setFormErr(''); };
   const openModal = () => { resetForm(); setShowModal(true); };
 
+  const closeReceipt = async () => {
+    setReceipt(null);
+    setShowModal(false);
+    resetForm();
+    await fetchData();
+    showToast('Payment recorded — cashbook updated automatically');
+  };
+
   const submitPayment = async () => {
     if (!loanId) { setFormErr('Please select a loan'); return; }
     if (amt <= 0) { setFormErr('Enter a valid amount'); return; }
     if (selectedLoan && amt > Number(selectedLoan.balance_total)) { setFormErr('Amount exceeds outstanding balance'); return; }
     setFormErr(''); setSubmitting(true);
     try {
-      await payments.create({ loan_id: loanId, amount_paid: amt, payment_date: payDate, payment_method: method, transaction_reference: ref || undefined });
-      await fetchData();
-      setShowModal(false); resetForm();
-      showToast('Payment recorded — cashbook updated automatically');
+      const result = await payments.create({
+        loan_id: loanId, amount_paid: amt, payment_date: payDate,
+        payment_method: method, transaction_reference: ref || undefined,
+      }) as any;
+
+      // Build receipt data from API response + current form context
+      const pay = result?.payment ?? result;
+      const alloc = result?.allocation ?? {};
+      setReceipt({
+        receipt_number:        pay.receipt_number ?? '—',
+        payment_date:          pay.payment_date   ?? payDate,
+        created_at:            pay.created_at     ?? new Date().toISOString(),
+        amount_paid:           Number(pay.amount_paid)        || amt,
+        interest_portion:      Number(pay.interest_portion)   || 0,
+        principal_portion:     Number(pay.principal_portion)  || 0,
+        balance_total_after:   Number(pay.balance_total_after)    ?? Number(alloc.newBalanceTotal)    ?? 0,
+        balance_interest_after: Number(pay.balance_interest_after) ?? Number(alloc.newBalanceInterest) ?? 0,
+        balance_principal_after: Number(pay.balance_principal_after) ?? Number(alloc.newBalancePrincipal) ?? 0,
+        payment_method:        pay.payment_method ?? method,
+        transaction_reference: pay.transaction_reference ?? ref ?? null,
+        loan_cleared:          alloc.loanCleared ?? false,
+        member_name:           selectedLoan?.member_name ?? '',
+        loan_number:           selectedLoan?.loan_number ?? '',
+        group_name:            selectedLoan?.group_name  ?? '',
+      });
+      // Keep record modal open — receipt takes over
     } catch (e) { setFormErr(e instanceof Error ? e.message : 'Payment failed'); }
     finally { setSubmitting(false); }
   };
@@ -100,6 +339,9 @@ export default function PaymentsPageClient() {
           <CheckCircle className="w-4 h-4" /> {toast}
         </div>
       )}
+
+      {/* POS Receipt Modal */}
+      {receipt && <ReceiptModal receipt={receipt} onClose={closeReceipt} />}
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -192,7 +434,7 @@ export default function PaymentsPageClient() {
       </div>
 
       {/* ── RECORD PAYMENT MODAL ── */}
-      {showModal && (
+      {showModal && !receipt && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">

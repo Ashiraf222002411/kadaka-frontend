@@ -69,6 +69,7 @@ export const dashboard = {
   getRecentPayments: () => apiFetch<{ data?: unknown[]; rows?: unknown[] }>('/api/dashboard/recent-payments'),
   getOverdueLoans: () => apiFetch<{ data?: unknown[]; rows?: unknown[] }>('/api/dashboard/overdue-loans'),
   getSummary: () => apiFetch('/api/dashboard/summary'),
+  getOfficerPortfolio: () => apiFetch('/api/dashboard/officer-portfolio'),
 };
 
 // ── Members ─────────────────────────────────────────────────────────────────

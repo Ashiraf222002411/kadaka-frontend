@@ -117,7 +117,9 @@ export default function DashboardNav() {
               Main Menu
             </p>
             <ul className="space-y-0.5">
-              {NAV_MAIN.map(item => <NavItem key={item.path} {...item} />)}
+              {NAV_MAIN
+                .filter(item => item.path !== '/cashbook' || role === 'branch_manager' || role === 'accountant')
+                .map(item => <NavItem key={item.path} {...item} />)}
             </ul>
           </div>
           {role === 'branch_manager' && (

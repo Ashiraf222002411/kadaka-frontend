@@ -82,14 +82,6 @@ export default function SignInPage() {
             </button>
           </form>
 
-          <div className="mt-6 p-4 bg-green-50 border border-green-100 rounded-xl">
-            <p className="text-xs font-semibold text-green-800 mb-2">Demo Credentials</p>
-            <div className="space-y-1 text-xs text-green-700">
-              <p><span className="font-medium">Branch Manager:</span> admin@kadaka.ug</p>
-              <p><span className="font-medium">Loan Officer:</span> officer@kadaka.ug</p>
-              <p><span className="font-medium">Password:</span> Kadaka@2026</p>
-            </div>
-          </div>
         </div>
       </div>
 

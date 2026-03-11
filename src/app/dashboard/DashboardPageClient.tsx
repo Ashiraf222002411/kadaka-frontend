@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { TrendingUp, DollarSign, AlertTriangle, Users, ArrowUpRight, Clock, CheckCircle, BarChart3, RefreshCw } from 'lucide-react';
 import { dashboard } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import OfficerPortfolioClient from './OfficerPortfolioClient';
 
 type Stats = { totalMembers: number; activeLoans: number; totalPortfolio: number; collectionsToday: number; collectionsMTD: number; overdueLoans: number; portfolioAtRisk: number; disbursementsToday: number; pendingApprovals?: number };
 type LoanRow = { loan_number: string; member_name: string; group_name: string; approved_amount: number; amount_applied: number; status: string; created_at: string };
@@ -21,7 +22,8 @@ const StatusBadge = ({ s }: { s: string }) => {
   return <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border capitalize ${m[s] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`}>{s}</span>;
 };
 
-export default function DashboardPageClient() {
+// ── Org-wide branch manager dashboard ───────────────────────────────────────
+function BranchManagerDashboard() {
   const { user } = useAuth();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loans, setLoans]  = useState<LoanRow[]>([]);
@@ -190,4 +192,11 @@ export default function DashboardPageClient() {
       </div>
     </div>
   );
+}
+
+// ── Role-based wrapper — exports the right dashboard per role ─────────────────
+export default function DashboardPageClient() {
+  const { user } = useAuth();
+  if (user?.role === 'loan_officer') return <OfficerPortfolioClient />;
+  return <BranchManagerDashboard />;
 }
