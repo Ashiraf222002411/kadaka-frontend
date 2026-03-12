@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, CreditCard,
   Banknote, BookOpen, BarChart3, FileText,
   Settings, LogOut, Menu, X, Bell,
-  ChevronRight, Search, AlertCircle, UserCog, ClipboardList,
+  ChevronRight, Search, AlertCircle, UserCog, ClipboardList, Database,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getRoleLabel, getInitials } from '@/lib/auth';
@@ -22,12 +22,13 @@ const NAV_MAIN = [
   { name: 'Reports',   path: '/reports',    icon: BarChart3 },
 ];
 const NAV_ADMIN = [
-  { name: 'Users',       path: '/users',       icon: UserCog },
-  { name: 'Audit Logs',  path: '/audit-logs',  icon: ClipboardList },
+  { name: 'Users',           path: '/users',            icon: UserCog },
+  { name: 'Audit Logs',      path: '/audit-logs',       icon: ClipboardList },
+  { name: 'Data Management', path: '/data-management',  icon: Database },
 ];
 const NAV_SUPPORT = [
   { name: 'Documents', path: '/documents', icon: FileText },
-  { name: 'Settings',  path: '#',          icon: Settings },
+  { name: 'Settings',  path: '/settings',  icon: Settings },
 ];
 
 export default function DashboardNav() {

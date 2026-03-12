@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Search, X, RefreshCw, AlertCircle, ChevronLeft, ChevronRight,
   LogIn, UserPlus, UserCog, CreditCard, Banknote, Send, KeyRound, Shield } from 'lucide-react';
 import { auditLogs } from '@/lib/api';
+import { todayUG } from '@/lib/dateUtils';
 
 type AuditLog = {
   id: string; user_name: string; user_role: string; action: string;
@@ -34,7 +35,7 @@ const ROLE_LABEL: Record<string, string> = {
   accountant:     'Accountant',
 };
 
-const today = () => new Date().toISOString().split('T')[0];
+const today = () => todayUG();
 
 export default function AuditLogsPageClient() {
   const [logs, setLogs]         = useState<AuditLog[]>([]);
@@ -153,8 +154,8 @@ export default function AuditLogsPageClient() {
                     return (
                       <tr key={log.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
                         <td className="px-5 py-3.5 text-xs text-slate-500 whitespace-nowrap">
-                          <p className="font-medium text-slate-700">{new Date(log.created_at).toLocaleDateString('en-UG', { day: '2-digit', month: 'short' })}</p>
-                          <p>{new Date(log.created_at).toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })}</p>
+                          <p className="font-medium text-slate-700">{new Date(log.created_at).toLocaleDateString('en-UG', { day: '2-digit', month: 'short', timeZone: 'Africa/Kampala' })}</p>
+                          <p>{new Date(log.created_at).toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kampala' })}</p>
                         </td>
                         <td className="px-5 py-3.5">
                           <p className="font-semibold text-slate-900 text-xs">{log.user_name}</p>

@@ -95,6 +95,7 @@ export const members = {
     apiFetch('/api/members', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Record<string, unknown>) =>
     apiFetch(`/api/members/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  remove: (id: string) => apiFetch(`/api/members/${id}`, { method: 'DELETE' }),
   getLoans: (id: string) => apiFetch(`/api/members/${id}/loans`),
 };
 
@@ -138,6 +139,7 @@ export const loans = {
     apiFetch(`/api/loans/${id}/disburse`, { method: 'PATCH', body: JSON.stringify({ disbursement_method: method }) }),
   applyPenalty: (id: string) =>
     apiFetch(`/api/loans/${id}/penalty`, { method: 'PATCH' }),
+  remove: (id: string) => apiFetch(`/api/loans/${id}`, { method: 'DELETE' }),
 };
 
 // ── Payments ────────────────────────────────────────────────────────────────
@@ -152,6 +154,9 @@ export const payments = {
     loan_id: string; amount_paid: number; payment_date?: string;
     payment_method?: string; transaction_reference?: string; notes?: string;
   }) => apiFetch('/api/payments', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Record<string, unknown>) =>
+    apiFetch(`/api/payments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  remove: (id: string) => apiFetch(`/api/payments/${id}`, { method: 'DELETE' }),
 };
 
 // ── Cashbook ────────────────────────────────────────────────────────────────
@@ -198,6 +203,18 @@ export const auditLogs = {
     return apiFetch<{ data: unknown[]; total: number; page: number; limit: number }>(`/api/audit-logs${qs}`);
   },
   getActions: () => apiFetch<string[]>('/api/audit-logs/actions'),
+};
+
+// ── Data Management ──────────────────────────────────────────────────────────
+export const dataManagement = {
+  exportData: () => apiFetch<{ members: unknown[]; loans: unknown[]; payments: unknown[]; cashbook: unknown[] }>('/api/data-management/export'),
+  getStats: () => apiFetch<{ member: number; loan: number; payment: number; total: number }>('/api/data-management/stats'),
+  getTrash: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return apiFetch<{ data: unknown[]; total: number; page: number; limit: number }>(`/api/data-management/trash${qs}`);
+  },
+  resetData: () => apiFetch('/api/data-management/reset', { method: 'DELETE', body: JSON.stringify({ confirm: 'DELETE' }) }),
+  restore: (id: string) => apiFetch(`/api/data-management/restore/${id}`, { method: 'POST' }),
 };
 
 // ── Reports ─────────────────────────────────────────────────────────────────

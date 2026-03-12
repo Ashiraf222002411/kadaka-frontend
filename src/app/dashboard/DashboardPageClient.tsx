@@ -182,7 +182,7 @@ function BranchManagerDashboard() {
                       <td className="px-4 py-3 font-mono text-xs text-gray-600">{p.loan_number}</td>
                       <td className="px-4 py-3 font-medium text-gray-800">{p.member_name}</td>
                       <td className="px-4 py-3 text-right font-bold text-green-700">{ugx(p.amount_paid)}</td>
-                      <td className="px-4 py-3 text-center text-xs text-gray-500">{new Date(p.payment_date).toLocaleDateString()}</td>
+                      <td className="px-4 py-3 text-center text-xs text-gray-500">{new Date(p.payment_date).toLocaleDateString('en-UG', { day: '2-digit', month: 'short', timeZone: 'Africa/Kampala' })}</td>
                     </tr>
                   ))}
                 </tbody>

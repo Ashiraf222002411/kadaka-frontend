@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Plus, Search, X, CheckCircle, XCircle, Send, Eye,
-  Loader2, AlertCircle, BookOpen, RefreshCw, Upload, Camera,
+  Loader2, AlertCircle, BookOpen, RefreshCw, Upload, Camera, Trash2,
 } from 'lucide-react';
 import { loans, members, uploadFile } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -127,6 +127,11 @@ export default function LoansPageClient() {
   const canApprove  = role === 'branch_manager';
   const canDisburse = role === 'branch_manager' || role === 'accountant';
   const canCreate   = role === 'branch_manager' || role === 'loan_officer' || role === 'accountant';
+  const canDelete   = role === 'branch_manager' || role === 'loan_officer' || role === 'accountant';
+
+  // Delete state
+  const [deleteLoan,  setDeleteLoan]  = useState<Loan | null>(null);
+  const [deleting,    setDeleting]    = useState(false);
 
   const [loanList,   setLoanList]   = useState<Loan[]>([]);
   const [memberList, setMemberList] = useState<Member[]>([]);
@@ -223,6 +228,16 @@ export default function LoansPageClient() {
     setStep(1); setMemberId(''); setLoanType('business'); setAmount('');
     setPurpose(''); setPreview(null); setAssetDesc(''); setAssetValue('');
     setNokPhotoUrl(''); setSupportingDocUrl('');
+  };
+
+  const submitDeleteLoan = async () => {
+    if (!deleteLoan) return;
+    setDeleting(true);
+    try {
+      await loans.remove(deleteLoan.id);
+      await fetchLoans(); setDeleteLoan(null); showToast('Loan deleted');
+    } catch (e) { showToast(e instanceof Error ? e.message : 'Delete failed'); setDeleteLoan(null); }
+    finally { setDeleting(false); }
   };
 
   const submitLoan = async () => {
@@ -375,6 +390,9 @@ export default function LoansPageClient() {
                         )}
                         {canDisburse && l.status === 'approved' && (
                           <button onClick={() => openDisburse(l)} className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-[10px] font-bold border border-purple-200 transition-colors flex items-center gap-1"><Send className="w-3 h-3" />Disburse</button>
+                        )}
+                        {canDelete && (l.status === 'pending' || l.status === 'rejected') && (
+                          <button onClick={() => setDeleteLoan(l)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
                         )}
                       </div>
                     </td>
@@ -637,6 +655,31 @@ export default function LoansPageClient() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* ── DELETE LOAN CONFIRM ── */}
+      {deleteLoan && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900">Delete Loan</h3>
+                <p className="text-xs text-gray-500">Moves record to recycle bin</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 mb-2">Delete loan <span className="font-semibold text-gray-900">{deleteLoan.loan_number}</span> for <span className="font-semibold">{deleteLoan.member_name}</span>?</p>
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-5">Only pending and rejected loans can be deleted. This can be undone from Data Management.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteLoan(null)} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={submitDeleteLoan} disabled={deleting} className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50">
+                {deleting ? <><Loader2 className="w-4 h-4 animate-spin" />Deleting…</> : <><Trash2 className="w-4 h-4" />Delete</>}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

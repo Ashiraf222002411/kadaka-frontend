@@ -189,7 +189,7 @@ export default function UsersPageClient() {
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-xs text-slate-500">
-                        {u.last_login ? new Date(u.last_login).toLocaleDateString('en-UG', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Never'}
+                        {u.last_login ? new Date(u.last_login).toLocaleDateString('en-UG', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Africa/Kampala' }) : 'Never'}
                       </td>
                       <td className="px-5 py-3.5 text-right">
                         {!isMe && (

@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Search, X, CheckCircle, Loader2, AlertCircle, RefreshCw, User, Eye, Upload, Camera, ScanLine } from 'lucide-react';
+import { Plus, Search, X, CheckCircle, Loader2, AlertCircle, RefreshCw, User, Eye, Upload, Camera, ScanLine, Pencil, Trash2 } from 'lucide-react';
 import { members, uploadFile } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 type Member = {
   id: string; member_code: string; full_name: string; national_id: string; phone: string;
@@ -84,6 +85,8 @@ function FileUploadBtn({ label, accept, uploaded, uploading, onChange, captureMo
 }
 
 export default function MembersPageClient() {
+  const { user } = useAuth();
+  const role = user?.role ?? '';
   const [list, setList] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
@@ -101,6 +104,17 @@ export default function MembersPageClient() {
   const [uploadingDoc,   setUploadingDoc]   = useState(false);
   const photoFileRef   = useRef<HTMLInputElement>(null);
   const photoCameraRef = useRef<HTMLInputElement>(null);
+
+  // Edit state
+  const [showEdit, setShowEdit] = useState(false);
+  const [editTarget, setEditTarget] = useState<Member | null>(null);
+  const [editF, setEditF] = useState<Record<string, string>>({});
+  const [editErr, setEditErr]   = useState('');
+  const [saving, setSaving]     = useState(false);
+
+  // Delete state
+  const [deleteTarget, setDeleteTarget] = useState<Member | null>(null);
+  const [deleting, setDeleting]         = useState(false);
 
   const upd = (k: keyof F) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF(p => ({ ...p, [k]: e.target.value }));
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(''), 3500); };
@@ -164,6 +178,36 @@ export default function MembersPageClient() {
     finally { setSubmitting(false); }
   };
 
+  const openEdit = (m: Member) => {
+    setEditTarget(m);
+    setEditF({
+      full_name: m.full_name, phone: m.phone, district: m.district,
+      village: m.village ?? '', business_type: m.business_type,
+      monthly_income: String(m.monthly_income), status: m.status,
+    });
+    setEditErr(''); setShowEdit(true);
+  };
+  const submitEdit = async () => {
+    if (!editTarget) return;
+    setSaving(true); setEditErr('');
+    try {
+      const payload: Record<string, unknown> = { ...editF };
+      if (payload.monthly_income) payload.monthly_income = Number(payload.monthly_income);
+      await members.update(editTarget.id, payload);
+      await fetchAll(); setShowEdit(false); showToast('Member updated');
+    } catch (e) { setEditErr(e instanceof Error ? e.message : 'Failed to update'); }
+    finally { setSaving(false); }
+  };
+  const submitDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await members.remove(deleteTarget.id);
+      await fetchAll(); setDeleteTarget(null); showToast('Member deleted');
+    } catch (e) { showToast(e instanceof Error ? e.message : 'Delete failed'); setDeleteTarget(null); }
+    finally { setDeleting(false); }
+  };
+
   const filtered = list.filter(m => {
     const q = search.toLowerCase();
     return (!q || m.full_name?.toLowerCase().includes(q) || m.member_code?.toLowerCase().includes(q) || m.national_id?.includes(q)) &&
@@ -213,7 +257,7 @@ export default function MembersPageClient() {
                 <th className="px-4 py-3 text-left hidden lg:table-cell">Business</th>
                 <th className="px-4 py-3 text-right hidden md:table-cell">Borrowed</th>
                 <th className="px-4 py-3 text-center">Status</th>
-                <th className="px-5 py-3 text-center">View</th>
+                <th className="px-5 py-3 text-center">Actions</th>
               </tr></thead>
               <tbody>
                 {filtered.map(m => (
@@ -232,7 +276,17 @@ export default function MembersPageClient() {
                     <td className="px-4 py-3 text-xs text-gray-600 hidden lg:table-cell">{m.business_type}</td>
                     <td className="px-4 py-3 text-right text-xs font-semibold hidden md:table-cell">{ugx(m.total_borrowed ?? 0)}</td>
                     <td className="px-4 py-3 text-center"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border capitalize ${SC[m.status] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`}>{m.status}</span></td>
-                    <td className="px-5 py-3 text-center"><button onClick={() => { setSel(m); setShowView(true); }} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"><Eye className="w-3.5 h-3.5" /></button></td>
+                    <td className="px-5 py-3 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => { setSel(m); setShowView(true); }} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="View"><Eye className="w-3.5 h-3.5" /></button>
+                        {(role === 'branch_manager' || role === 'loan_officer' || role === 'accountant') && (
+                          <button onClick={() => openEdit(m)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
+                        )}
+                        {(role === 'branch_manager' || role === 'loan_officer' || role === 'accountant') && m.active_loans === 0 && (
+                          <button onClick={() => setDeleteTarget(m)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -340,6 +394,64 @@ export default function MembersPageClient() {
               {step > 1 && <button onClick={() => setStep(s => s - 1)} className="px-4 py-2 text-sm font-semibold text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50">Back</button>}
               {step < 3 ? <button onClick={() => setStep(s => s + 1)} className="px-4 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-xl">Next</button>
                 : <button onClick={submit} disabled={submitting} className="px-4 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-xl flex items-center gap-2 disabled:opacity-50">{submitting ? <><Loader2 className="w-4 h-4 animate-spin" />Saving…</> : <><CheckCircle className="w-4 h-4" />Register</>}</button>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── EDIT MODAL ── */}
+      {showEdit && editTarget && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+              <h3 className="font-bold text-gray-900">Edit Member — {editTarget.member_code}</h3>
+              <button onClick={() => setShowEdit(false)} className="p-1.5 rounded-lg hover:bg-gray-100"><X className="w-4 h-4 text-gray-500" /></button>
+            </div>
+            <div className="overflow-y-auto p-6 flex-1 space-y-4">
+              {editErr && <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700"><AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />{editErr}</div>}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2"><label className={lc}>Full Name</label><input value={editF.full_name ?? ''} onChange={e => setEditF(p => ({ ...p, full_name: e.target.value }))} className={ic} /></div>
+                <div><label className={lc}>Phone</label><input value={editF.phone ?? ''} onChange={e => setEditF(p => ({ ...p, phone: e.target.value }))} className={ic} /></div>
+                <div><label className={lc}>District</label><input value={editF.district ?? ''} onChange={e => setEditF(p => ({ ...p, district: e.target.value }))} className={ic} /></div>
+                <div><label className={lc}>Village</label><input value={editF.village ?? ''} onChange={e => setEditF(p => ({ ...p, village: e.target.value }))} className={ic} /></div>
+                <div><label className={lc}>Business Type</label><input value={editF.business_type ?? ''} onChange={e => setEditF(p => ({ ...p, business_type: e.target.value }))} className={ic} /></div>
+                <div><label className={lc}>Monthly Income</label><input type="number" value={editF.monthly_income ?? ''} onChange={e => setEditF(p => ({ ...p, monthly_income: e.target.value }))} className={ic} /></div>
+                <div><label className={lc}>Status</label>
+                  <select value={editF.status ?? 'active'} onChange={e => setEditF(p => ({ ...p, status: e.target.value }))} className={ic}>
+                    {['active','inactive','defaulted','blacklisted'].map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex gap-3 justify-end shrink-0">
+              <button onClick={() => setShowEdit(false)} className="px-4 py-2 text-sm font-semibold text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50">Cancel</button>
+              <button onClick={submitEdit} disabled={saving} className="px-4 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-xl flex items-center gap-2 disabled:opacity-50">
+                {saving ? <><Loader2 className="w-4 h-4 animate-spin" />Saving…</> : <><CheckCircle className="w-4 h-4" />Save Changes</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── DELETE CONFIRM ── */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900">Delete Member</h3>
+                <p className="text-xs text-gray-500">This will move the record to recycle bin</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 mb-5">Are you sure you want to delete <span className="font-semibold text-gray-900">{deleteTarget.full_name}</span> ({deleteTarget.member_code})? This can be restored later from Data Management.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={submitDelete} disabled={deleting} className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50">
+                {deleting ? <><Loader2 className="w-4 h-4 animate-spin" />Deleting…</> : <><Trash2 className="w-4 h-4" />Delete</>}
+              </button>
             </div>
           </div>
         </div>

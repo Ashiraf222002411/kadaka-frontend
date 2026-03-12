@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, X, CheckCircle, BookOpen, Loader2, AlertCircle, RefreshCw, Smartphone, Banknote, Building2, Printer } from 'lucide-react';
+import { Plus, Search, X, CheckCircle, BookOpen, Loader2, AlertCircle, RefreshCw, Smartphone, Banknote, Building2, Printer, Pencil, Trash2 } from 'lucide-react';
 import { payments, loans } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { todayUG } from '@/lib/dateUtils';
 
 type Payment = {
   id: string; receipt_number: string; loan_number: string; member_name: string;
@@ -23,7 +25,7 @@ type ReceiptData = {
 
 const ugx  = (n: number | string | null) => 'UGX ' + Number(n || 0).toLocaleString();
 const Sk   = () => <div className="animate-pulse bg-gray-100 rounded-xl h-10 w-full" />;
-const today = () => new Date().toISOString().split('T')[0];
+const today = () => todayUG();
 
 const METHOD_MAP: Record<string, { label: string; color: string; Icon: React.FC<{ className?: string }> }> = {
   cash:          { label: 'Cash',         color: 'bg-green-50 text-green-700 border-green-200',  Icon: Banknote },
@@ -35,13 +37,14 @@ const METHOD_MAP: Record<string, { label: string; color: string; Icon: React.FC<
 function ReceiptModal({ receipt, onClose }: { receipt: ReceiptData; onClose: () => void }) {
   const printReceipt = () => window.print();
 
+  const TZ = 'Africa/Kampala';
   const fmt = (d: string) => {
     const dt = new Date(d);
-    return dt.toLocaleDateString('en-UG', { day: '2-digit', month: 'short', year: 'numeric' });
+    return dt.toLocaleDateString('en-UG', { day: '2-digit', month: 'short', year: 'numeric', timeZone: TZ });
   };
   const fmtTime = (d: string) => {
     const dt = new Date(d);
-    return dt.toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit', hour12: false });
+    return dt.toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: TZ });
   };
 
   const methodLabel = METHOD_MAP[receipt.payment_method]?.label ?? receipt.payment_method;
@@ -224,6 +227,8 @@ function ReceiptModal({ receipt, onClose }: { receipt: ReceiptData; onClose: () 
 }
 
 export default function PaymentsPageClient() {
+  const { user } = useAuth();
+  const role = user?.role ?? '';
   const [payList,  setPayList]  = useState<Payment[]>([]);
   const [actLoans, setActLoans] = useState<ActiveLoan[]>([]);
   const [loading,  setLoading]  = useState(true);
@@ -231,6 +236,18 @@ export default function PaymentsPageClient() {
   const [toast,    setToast]    = useState('');
   const [search,   setSearch]   = useState('');
   const [showModal, setShowModal] = useState(false);
+
+  // Edit state
+  const [editPayment, setEditPayment] = useState<Payment | null>(null);
+  const [editMethod,  setEditMethod]  = useState<'cash' | 'mobile_money' | 'bank_transfer'>('cash');
+  const [editRef,     setEditRef]     = useState('');
+  const [editDate,    setEditDate]    = useState('');
+  const [editErr,     setEditErr]     = useState('');
+  const [saving,      setSaving]      = useState(false);
+
+  // Delete state
+  const [deletePayment, setDeletePayment] = useState<Payment | null>(null);
+  const [deleting,      setDeleting]      = useState(false);
 
   // form state
   const [loanId,   setLoanId]   = useState('');
@@ -320,6 +337,36 @@ export default function PaymentsPageClient() {
     finally { setSubmitting(false); }
   };
 
+  const openEditPayment = (p: Payment) => {
+    setEditPayment(p);
+    setEditMethod((p.payment_method as 'cash' | 'mobile_money' | 'bank_transfer') ?? 'cash');
+    setEditRef('');
+    setEditDate(p.payment_date?.split('T')[0] ?? today());
+    setEditErr('');
+  };
+  const submitEditPayment = async () => {
+    if (!editPayment) return;
+    setSaving(true); setEditErr('');
+    try {
+      await payments.update(editPayment.id, {
+        payment_method: editMethod,
+        transaction_reference: editRef || undefined,
+        payment_date: editDate,
+      });
+      await fetchData(); setEditPayment(null); showToast('Payment updated');
+    } catch (e) { setEditErr(e instanceof Error ? e.message : 'Failed to update'); }
+    finally { setSaving(false); }
+  };
+  const submitDeletePayment = async () => {
+    if (!deletePayment) return;
+    setDeleting(true);
+    try {
+      await payments.remove(deletePayment.id);
+      await fetchData(); setDeletePayment(null); showToast('Payment deleted & loan balance reversed');
+    } catch (e) { showToast(e instanceof Error ? e.message : 'Delete failed'); setDeletePayment(null); }
+    finally { setDeleting(false); }
+  };
+
   const filtered = payList.filter(p => {
     const q = search.toLowerCase();
     return !q || p.member_name?.toLowerCase().includes(q) || p.receipt_number?.toLowerCase().includes(q) || p.loan_number?.toLowerCase().includes(q);
@@ -402,6 +449,7 @@ export default function PaymentsPageClient() {
                   <th className="px-4 py-3 text-right hidden lg:table-cell">Balance After</th>
                   <th className="px-4 py-3 text-center">Method</th>
                   <th className="px-4 py-3 text-center">Date</th>
+                  <th className="px-4 py-3 text-center">Actions</th>
                 </tr></thead>
                 <tbody>
                   {filtered.map((p) => {
@@ -423,7 +471,15 @@ export default function PaymentsPageClient() {
                             <MIcon className="w-3 h-3" />{m.label}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-center text-xs text-gray-500">{new Date(p.payment_date).toLocaleDateString()}</td>
+                        <td className="px-4 py-3 text-center text-xs text-gray-500">{new Date(p.payment_date).toLocaleDateString('en-UG', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Africa/Kampala' })}</td>
+                        <td className="px-4 py-3 text-center">
+                          {(role === 'branch_manager' || role === 'loan_officer' || role === 'accountant') && (
+                            <div className="flex items-center justify-center gap-1">
+                              <button onClick={() => openEditPayment(p)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => setDeletePayment(p)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
@@ -432,6 +488,79 @@ export default function PaymentsPageClient() {
             </div>
           )}
       </div>
+
+      {/* ── EDIT PAYMENT MODAL ── */}
+      {editPayment && !receipt && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900">Edit Payment — {editPayment.receipt_number}</h3>
+              <button onClick={() => setEditPayment(null)} className="p-1.5 rounded-lg hover:bg-gray-100"><X className="w-4 h-4 text-gray-500" /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              {editErr && <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700"><AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />{editErr}</div>}
+              <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-500">
+                Amount paid (<span className="font-bold text-gray-900">{ugx(editPayment.amount_paid)}</span>) cannot be changed. Edit method, date, or reference.
+              </div>
+              <div>
+                <label className={labelCls}>Payment Date</label>
+                <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} max={today()} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Payment Method</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['cash', 'mobile_money', 'bank_transfer'] as const).map(mth => {
+                    const info = METHOD_MAP[mth]; const MIcon = info.Icon;
+                    return (
+                      <button key={mth} type="button" onClick={() => setEditMethod(mth)}
+                        className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 text-xs font-semibold transition-all ${editMethod === mth ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 bg-white text-gray-600'}`}>
+                        <MIcon className="w-4 h-4" />{info.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {(editMethod === 'mobile_money' || editMethod === 'bank_transfer') && (
+                <div>
+                  <label className={labelCls}>Transaction Reference</label>
+                  <input type="text" value={editRef} onChange={e => setEditRef(e.target.value)} placeholder="e.g. MTN123456" className={inputCls} />
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex gap-3 justify-end">
+              <button onClick={() => setEditPayment(null)} className="px-4 py-2 text-sm font-semibold text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50">Cancel</button>
+              <button onClick={submitEditPayment} disabled={saving} className="px-4 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-xl flex items-center gap-2 disabled:opacity-50">
+                {saving ? <><Loader2 className="w-4 h-4 animate-spin" />Saving…</> : <><CheckCircle className="w-4 h-4" />Save Changes</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── DELETE PAYMENT CONFIRM ── */}
+      {deletePayment && !receipt && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900">Delete Payment</h3>
+                <p className="text-xs text-gray-500">Loan balance will be reversed</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 mb-2">Delete payment <span className="font-semibold text-gray-900">{deletePayment.receipt_number}</span> for <span className="font-semibold">{deletePayment.member_name}</span>?</p>
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-5">⚠ The loan balance of {ugx(deletePayment.amount_paid)} will be reversed. This can be undone from Data Management.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeletePayment(null)} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={submitDeletePayment} disabled={deleting} className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50">
+                {deleting ? <><Loader2 className="w-4 h-4 animate-spin" />Deleting…</> : <><Trash2 className="w-4 h-4" />Delete</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── RECORD PAYMENT MODAL ── */}
       {showModal && !receipt && (

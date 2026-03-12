@@ -6,6 +6,7 @@ import {
   X, Loader2, AlertCircle, BarChart3, Download, FileSpreadsheet, Printer,
 } from 'lucide-react';
 import { reports, members } from '@/lib/api';
+import { todayUG } from '@/lib/dateUtils';
 
 type ReportType = 'daily_financial' | 'portfolio_risk' | 'collection_sheet' | 'loan_aging' | 'disbursements' | 'member_statement';
 
@@ -19,7 +20,7 @@ const REPORT_DEFS = [
 ];
 
 const ugx = (n: number | string | null) => 'UGX ' + Number(n || 0).toLocaleString();
-const today = () => new Date().toISOString().split('T')[0];
+const today = () => todayUG();
 
 // ── CSV helper ───────────────────────────────────────────────────────────────
 function downloadCSV(filename: string, rows: string[][]): void {
@@ -55,7 +56,7 @@ function printReport(title: string, content: string): void {
 <body>
   <div class="logo">Kadaka Establishment Co. Ltd</div>
   <h1>${title}</h1>
-  <div class="sub">Generated on ${new Date().toLocaleDateString('en-UG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+  <div class="sub">Generated on ${new Date().toLocaleDateString('en-UG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Africa/Kampala' })}</div>
   ${content}
   <script>window.onload = () => { window.print(); }<\/script>
 </body>
@@ -105,7 +106,7 @@ function toCSV(reportId: ReportType, data: any): string[][] {
   if (reportId === 'portfolio_risk') {
     const rows: string[][] = [
       ['Portfolio at Risk Report'],
-      ['Generated', new Date().toLocaleDateString()],
+      ['Generated', new Date().toLocaleDateString('en-UG', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Africa/Kampala' })],
       [],
       ['Metric', 'Value'],
       ['Total Portfolio (UGX)', data.total_portfolio ?? ''],
@@ -136,7 +137,7 @@ function toCSV(reportId: ReportType, data: any): string[][] {
   if (reportId === 'loan_aging') {
     const rows: string[][] = [
       ['Loan Aging Analysis'],
-      ['Generated', new Date().toLocaleDateString()],
+      ['Generated', new Date().toLocaleDateString('en-UG', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Africa/Kampala' })],
       [],
       ['Loan #', 'Member', 'Amount', 'Balance', 'Start Date', 'End Date', 'Days Outstanding', 'Days Overdue'],
     ];

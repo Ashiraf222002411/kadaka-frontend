@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Plus, X, CheckCircle, BookOpen, Loader2, AlertCircle, RefreshCw, ChevronLeft, ChevronRight, Info, Lock } from 'lucide-react';
 import { cashbook } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { todayUG } from '@/lib/dateUtils';
 
 type Tx = {
   id: string; transaction_date: string; transaction_time: string;
@@ -21,7 +22,7 @@ const TYPE_STYLE: Record<string, string> = {
 };
 const TYPE_LABEL: Record<string, string> = { cash_in: 'Cash In', expense: 'Expense', disbursement: 'Disbursement' };
 const Sk = () => <div className="animate-pulse bg-gray-100 rounded-xl h-10 w-full" />;
-const today = () => new Date().toISOString().split('T')[0];
+const today = () => todayUG();
 
 const inputCls = 'w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50 focus:bg-white';
 const labelCls = 'block text-xs font-semibold text-gray-700 mb-1.5';
@@ -109,7 +110,7 @@ function CashbookContent() {
   const shiftDate = (days: number) => {
     const d = new Date(date);
     d.setDate(d.getDate() + days);
-    setDate(d.toISOString().split('T')[0]);
+    setDate(d.toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' }));
   };
 
   const submitEntry = async () => {
@@ -204,7 +205,7 @@ function CashbookContent() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
           <BookOpen className="w-4 h-4 text-green-600" />
-          <h2 className="font-bold text-gray-900 text-sm">Transactions for {new Date(date + 'T12:00:00').toLocaleDateString('en-UG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h2>
+          <h2 className="font-bold text-gray-900 text-sm">Transactions for {new Date(date + 'T12:00:00').toLocaleDateString('en-UG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Africa/Kampala' })}</h2>
         </div>
         {loading ? <div className="p-6 space-y-3">{[...Array(5)].map((_, i) => <Sk key={i} />)}</div>
           : withBalance.length === 0 ? <div className="p-12 text-center text-sm text-gray-400">No transactions recorded for this date</div>
