@@ -162,8 +162,8 @@ export default function DataManagementPageClient() {
     if (confirmText !== 'DELETE') return;
     setResetting(true); setError(''); setSuccess('');
     try {
-      const res = await dataManagement.resetData() as { message: string; deleted: { members: number; loans: number; payments: number } };
-      setSuccess(`Reset complete — ${res.deleted.members} members, ${res.deleted.loans} loans, ${res.deleted.payments} payments moved to recycle bin.`);
+      const res = await dataManagement.resetData() as { message: string; deleted: { members: number; loans: number; payments: number; cashbook: number } };
+      setSuccess(`Reset complete — ${res.deleted.members} members, ${res.deleted.loans} loans, ${res.deleted.payments} payments, ${res.deleted.cashbook} cashbook entries moved to recycle bin.`);
       setShowResetModal(false);
       setConfirmText('');
       fetchStats();
