@@ -1,22 +1,21 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, X, CheckCircle, Loader2, AlertCircle, RefreshCw, User, Eye, Upload, Camera } from 'lucide-react';
-import { members, groups, uploadFile } from '@/lib/api';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Plus, Search, X, CheckCircle, Loader2, AlertCircle, RefreshCw, User, Eye, Upload, Camera, ScanLine } from 'lucide-react';
+import { members, uploadFile } from '@/lib/api';
 
 type Member = {
   id: string; member_code: string; full_name: string; national_id: string; phone: string;
   gender: string; date_of_birth: string; district: string; village?: string;
-  business_type: string; monthly_income: number; group_name?: string; group_id?: string;
+  business_type: string; monthly_income: number; group_name?: string;
   residence_status?: string; status: string; active_loans?: number; total_borrowed?: number;
   photo_url?: string; supporting_doc_url?: string;
 };
-type Group  = { id: string; name: string; group_code: string };
 type F = {
   full_name: string; national_id: string; phone: string; alternative_phone: string;
   gender: string; date_of_birth: string; district: string; village: string;
   residence_status: string; landlord_name: string; landlord_phone: string; landlord_location: string;
-  business_type: string; monthly_income: string; group_id: string;
+  business_type: string; monthly_income: string;
   next_of_kin_name: string; next_of_kin_relationship: string; next_of_kin_phone: string;
   photo_url: string; supporting_doc_url: string;
 };
@@ -25,7 +24,7 @@ const INIT: F = {
   full_name: '', national_id: '', phone: '', alternative_phone: '', gender: 'female',
   date_of_birth: '', district: '', village: '', residence_status: 'owned',
   landlord_name: '', landlord_phone: '', landlord_location: '', business_type: '',
-  monthly_income: '', group_id: '', next_of_kin_name: '', next_of_kin_relationship: '',
+  monthly_income: '', next_of_kin_name: '', next_of_kin_relationship: '',
   next_of_kin_phone: '', photo_url: '', supporting_doc_url: '',
 };
 
@@ -38,29 +37,54 @@ const Sk  = () => <div className="animate-pulse bg-gray-100 rounded-xl h-10 w-fu
 const ic = 'w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50 focus:bg-white';
 const lc = 'block text-xs font-semibold text-gray-700 mb-1.5';
 
-function FileUploadBtn({ label, accept, uploaded, uploading, onChange }: {
+// Dual-button upload: Browse + Scan (camera)
+function FileUploadBtn({ label, accept, uploaded, uploading, onChange, captureMode }: {
   label: string; accept: string; uploaded: boolean; uploading: boolean;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  captureMode?: 'environment' | 'user';
 }) {
+  const fileRef   = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
   return (
     <div>
       <label className={lc}>{label}</label>
-      <label className={`flex items-center gap-3 px-3 py-2.5 border-2 border-dashed rounded-xl cursor-pointer transition-all ${uploaded ? 'border-green-400 bg-green-50' : 'border-gray-200 hover:border-green-300 bg-gray-50'}`}>
-        {uploading ? <Loader2 className="w-4 h-4 animate-spin text-green-600" />
-          : uploaded ? <CheckCircle className="w-4 h-4 text-green-600" />
-          : <Upload className="w-4 h-4 text-gray-400" />}
-        <span className={`text-xs font-medium ${uploaded ? 'text-green-700' : 'text-gray-500'}`}>
-          {uploading ? 'Uploading…' : uploaded ? 'Uploaded ✓' : 'Click to choose file'}
-        </span>
-        <input type="file" accept={accept} onChange={onChange} className="hidden" />
-      </label>
+      {uploading ? (
+        <div className="flex items-center gap-2 px-3 py-2.5 border-2 border-dashed border-green-300 rounded-xl bg-green-50">
+          <Loader2 className="w-4 h-4 animate-spin text-green-600" />
+          <span className="text-xs font-medium text-green-700">Uploading…</span>
+        </div>
+      ) : uploaded ? (
+        <div className="flex items-center gap-2 px-3 py-2.5 border-2 border-green-400 rounded-xl bg-green-50">
+          <CheckCircle className="w-4 h-4 text-green-600" />
+          <span className="text-xs font-medium text-green-700 flex-1">Uploaded ✓</span>
+          <button type="button" onClick={() => fileRef.current?.click()} className="text-[10px] text-green-600 underline">Replace</button>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <button type="button" onClick={() => fileRef.current?.click()}
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 border-2 border-dashed border-gray-200 rounded-xl hover:border-green-300 hover:bg-green-50 transition-all cursor-pointer group">
+            <Upload className="w-4 h-4 text-gray-400 group-hover:text-green-500" />
+            <span className="text-xs font-medium text-gray-500 group-hover:text-green-700">Browse</span>
+          </button>
+          {captureMode && (
+            <button type="button" onClick={() => cameraRef.current?.click()}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 border-2 border-dashed border-gray-200 rounded-xl hover:border-teal-300 hover:bg-teal-50 transition-all cursor-pointer group">
+              <ScanLine className="w-4 h-4 text-gray-400 group-hover:text-teal-500" />
+              <span className="text-xs font-medium text-gray-500 group-hover:text-teal-700">Scan</span>
+            </button>
+          )}
+        </div>
+      )}
+      <input ref={fileRef} type="file" accept={accept} onChange={onChange} className="hidden" />
+      {captureMode && (
+        <input ref={cameraRef} type="file" accept="image/*" capture={captureMode} onChange={onChange} className="hidden" />
+      )}
     </div>
   );
 }
 
 export default function MembersPageClient() {
   const [list, setList] = useState<Member[]>([]);
-  const [grps, setGrps] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
   const [toast, setToast]     = useState('');
@@ -75,6 +99,8 @@ export default function MembersPageClient() {
   const [f, setF] = useState<F>(INIT);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadingDoc,   setUploadingDoc]   = useState(false);
+  const photoFileRef   = useRef<HTMLInputElement>(null);
+  const photoCameraRef = useRef<HTMLInputElement>(null);
 
   const upd = (k: keyof F) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF(p => ({ ...p, [k]: e.target.value }));
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(''), 3500); };
@@ -82,9 +108,8 @@ export default function MembersPageClient() {
   const fetchAll = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const [m, g] = await Promise.all([members.getAll({ limit: 200 }), groups.getAll()]);
+      const m = await members.getAll({ limit: 200 });
       setList((m.data ?? []) as Member[]);
-      setGrps((Array.isArray(g) ? g : (g as {data?: unknown[]}).data ?? []) as Group[]);
     } catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setLoading(false); }
   }, []);
@@ -95,16 +120,26 @@ export default function MembersPageClient() {
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
-    setUploadingPhoto(true);
-    try { const { url } = await uploadFile(file); setF(p => ({ ...p, photo_url: url })); } catch {}
-    finally { setUploadingPhoto(false); }
+    e.target.value = ''; // reset so same file can be re-picked
+    setUploadingPhoto(true); setFormErr('');
+    try {
+      const { url } = await uploadFile(file);
+      setF(p => ({ ...p, photo_url: url }));
+    } catch (err) {
+      setFormErr(err instanceof Error ? `Photo upload failed: ${err.message}` : 'Photo upload failed');
+    } finally { setUploadingPhoto(false); }
   };
 
   const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
-    setUploadingDoc(true);
-    try { const { url } = await uploadFile(file); setF(p => ({ ...p, supporting_doc_url: url })); } catch {}
-    finally { setUploadingDoc(false); }
+    e.target.value = ''; // reset so same file can be re-picked
+    setUploadingDoc(true); setFormErr('');
+    try {
+      const { url } = await uploadFile(file);
+      setF(p => ({ ...p, supporting_doc_url: url }));
+    } catch (err) {
+      setFormErr(err instanceof Error ? `Document upload failed: ${err.message}` : 'Document upload failed');
+    } finally { setUploadingDoc(false); }
   };
 
   const submit = async () => {
@@ -115,7 +150,6 @@ export default function MembersPageClient() {
     try {
       await members.create({
         ...f, monthly_income: Number(f.monthly_income),
-        group_id: f.group_id || undefined,
         alternative_phone: f.alternative_phone || undefined,
         village: f.village || undefined,
         next_of_kin_name: f.next_of_kin_name || undefined,
@@ -176,7 +210,6 @@ export default function MembersPageClient() {
               <thead><tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500 font-semibold uppercase tracking-wide">
                 <th className="px-5 py-3 text-left">Member</th>
                 <th className="px-4 py-3 text-left hidden sm:table-cell">National ID</th>
-                <th className="px-4 py-3 text-left hidden md:table-cell">Group</th>
                 <th className="px-4 py-3 text-left hidden lg:table-cell">Business</th>
                 <th className="px-4 py-3 text-right hidden md:table-cell">Borrowed</th>
                 <th className="px-4 py-3 text-center">Status</th>
@@ -196,7 +229,6 @@ export default function MembersPageClient() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-xs font-mono text-gray-600 hidden sm:table-cell">{m.national_id}</td>
-                    <td className="px-4 py-3 text-xs text-gray-600 hidden md:table-cell">{m.group_name ?? '—'}</td>
                     <td className="px-4 py-3 text-xs text-gray-600 hidden lg:table-cell">{m.business_type}</td>
                     <td className="px-4 py-3 text-right text-xs font-semibold hidden md:table-cell">{ugx(m.total_borrowed ?? 0)}</td>
                     <td className="px-4 py-3 text-center"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border capitalize ${SC[m.status] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`}>{m.status}</span></td>
@@ -225,17 +257,36 @@ export default function MembersPageClient() {
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Step 1 — Personal Info & Photo</p>
                 {/* Photo upload */}
                 <div>
-                  <label className={lc}>Member Photo</label>
-                  <label className={`flex items-center gap-3 px-3 py-2.5 border-2 border-dashed rounded-xl cursor-pointer transition-all ${f.photo_url ? 'border-green-400 bg-green-50' : 'border-gray-200 hover:border-green-300 bg-gray-50'}`}>
-                    {f.photo_url
-                      ? <img src={f.photo_url} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
-                      : uploadingPhoto ? <Loader2 className="w-4 h-4 animate-spin text-green-600" />
-                      : <Camera className="w-4 h-4 text-gray-400" />}
-                    <span className={`text-xs font-medium ${f.photo_url ? 'text-green-700' : 'text-gray-500'}`}>
-                      {uploadingPhoto ? 'Uploading…' : f.photo_url ? 'Photo uploaded ✓' : 'Upload passport photo (optional)'}
-                    </span>
-                    <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
-                  </label>
+                  <label className={lc}>Member Photo (optional)</label>
+                  {uploadingPhoto ? (
+                    <div className="flex items-center gap-2 px-3 py-2.5 border-2 border-dashed border-green-300 rounded-xl bg-green-50">
+                      <Loader2 className="w-4 h-4 animate-spin text-green-600" />
+                      <span className="text-xs font-medium text-green-700">Uploading…</span>
+                    </div>
+                  ) : f.photo_url ? (
+                    <div className="flex items-center gap-3 px-3 py-2.5 border-2 border-green-400 rounded-xl bg-green-50">
+                      <img src={f.photo_url} alt="" className="w-9 h-9 rounded-full object-cover shrink-0 border-2 border-green-300" />
+                      <span className="text-xs font-medium text-green-700 flex-1">Photo uploaded ✓</span>
+                      <button type="button" onClick={() => photoFileRef.current?.click()} className="text-[10px] text-green-600 underline">Replace</button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => photoFileRef.current?.click()}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 border-2 border-dashed border-gray-200 rounded-xl hover:border-green-300 hover:bg-green-50 transition-all group">
+                        <Upload className="w-4 h-4 text-gray-400 group-hover:text-green-500" />
+                        <span className="text-xs font-medium text-gray-500 group-hover:text-green-700">Browse</span>
+                      </button>
+                      <button type="button" onClick={() => photoCameraRef.current?.click()}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 border-2 border-dashed border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all group">
+                        <Camera className="w-4 h-4 text-gray-400 group-hover:text-blue-500" />
+                        <span className="text-xs font-medium text-gray-500 group-hover:text-blue-700">Take Photo</span>
+                      </button>
+                    </div>
+                  )}
+                  {/* Browse — no capture (file picker) */}
+                  <input ref={photoFileRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+                  {/* Camera — capture="user" = front camera on mobile */}
+                  <input ref={photoCameraRef} type="file" accept="image/*" capture="user" onChange={handlePhotoUpload} className="hidden" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2"><label className={lc}>Full Name *</label><input value={f.full_name} onChange={upd('full_name')} placeholder="First Last" className={ic} /></div>
@@ -268,25 +319,20 @@ export default function MembersPageClient() {
               </div>}
 
               {step === 3 && <div className="space-y-4">
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Step 3 — Group, Next of Kin & Documents</p>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Step 3 — Next of Kin & Documents</p>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2"><label className={lc}>Lending Group</label>
-                    <select value={f.group_id} onChange={upd('group_id')} className={ic}>
-                      <option value="">— No group —</option>
-                      {grps.map(g => <option key={g.id} value={g.id}>{g.name} ({g.group_code})</option>)}
-                    </select>
-                  </div>
                   <div className="col-span-2"><label className={lc}>Next of Kin Name</label><input value={f.next_of_kin_name} onChange={upd('next_of_kin_name')} placeholder="Full name" className={ic} /></div>
                   <div><label className={lc}>Relationship</label><input value={f.next_of_kin_relationship} onChange={upd('next_of_kin_relationship')} placeholder="e.g. Spouse" className={ic} /></div>
                   <div><label className={lc}>Phone</label><input value={f.next_of_kin_phone} onChange={upd('next_of_kin_phone')} placeholder="07XXXXXXXX" className={ic} /></div>
                 </div>
-                {/* Supporting document upload */}
+                {/* Supporting document — Browse + Scan (back camera) */}
                 <FileUploadBtn
                   label="Supporting Document (National ID / Agreement)"
                   accept=".pdf,image/*"
                   uploaded={!!f.supporting_doc_url}
                   uploading={uploadingDoc}
                   onChange={handleDocUpload}
+                  captureMode="environment"
                 />
               </div>}
             </div>
@@ -314,7 +360,7 @@ export default function MembersPageClient() {
             </div>
             <div className="overflow-y-auto p-6 flex-1">
               <div className="grid grid-cols-2 gap-3 text-sm">
-                {([['National ID', sel.national_id], ['Phone', sel.phone], ['Gender', sel.gender], ['District', sel.district], ['Business', sel.business_type], ['Income', ugx(sel.monthly_income)], ['Group', sel.group_name ?? '—'], ['Status', sel.status], ['Active Loans', String(sel.active_loans ?? 0)], ['Total Borrowed', ugx(sel.total_borrowed ?? 0)]] as [string,string][]).map(([k,v]) => (
+                {([['National ID', sel.national_id], ['Phone', sel.phone], ['Gender', sel.gender], ['District', sel.district], ['Business', sel.business_type], ['Income', ugx(sel.monthly_income)], ['Status', sel.status], ['Active Loans', String(sel.active_loans ?? 0)], ['Total Borrowed', ugx(sel.total_borrowed ?? 0)]] as [string,string][]).map(([k,v]) => (
                   <div key={k} className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-500 mb-0.5">{k}</p><p className="font-semibold text-gray-900 capitalize">{v}</p></div>
                 ))}
               </div>

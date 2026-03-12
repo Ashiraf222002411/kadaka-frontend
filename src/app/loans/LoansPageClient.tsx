@@ -9,12 +9,12 @@ import { loans, members, uploadFile } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 
 type Loan = {
-  id: string; loan_number: string; member_name: string; group_name: string;
+  id: string; loan_number: string; member_name: string;
   loan_type: string; amount_applied: number; approved_amount: number;
   total_interest: number; total_repayable: number; daily_payment: number;
   status: string; balance_total: number; days_overdue: number; created_at: string;
 };
-type Member = { id: string; member_code: string; full_name: string; group_name: string };
+type Member = { id: string; member_code: string; full_name: string };
 type Preview = { totalInterest: number; totalRepayable: number; dailyPayment: number };
 
 const ugx = (n: number | string | null) => 'UGX ' + Number(n || 0).toLocaleString();
@@ -72,33 +72,49 @@ function Modal({
 
 // ── FileUploadField component (also outside) ──────────────────────────────────
 function FileUploadField({
-  label, accept, onUploaded, uploading, setUploading, uploaded,
+  label, accept, onUploaded, onError, uploading, setUploading, uploaded,
 }: {
   label: string; accept: string;
   onUploaded: (url: string) => void;
+  onError?: (msg: string) => void;
   uploading: boolean; setUploading: (v: boolean) => void;
   uploaded: boolean;
 }) {
+  const inputRef = React.useRef<HTMLInputElement>(null);
   const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = ''; // reset so same file can be re-selected
     setUploading(true);
     try {
       const { url } = await uploadFile(file);
       onUploaded(url);
-    } catch { /* ignore */ }
-    finally { setUploading(false); }
+    } catch (err) {
+      onError?.(err instanceof Error ? err.message : 'Upload failed');
+    } finally { setUploading(false); }
   };
   return (
     <div>
       <label className={labelCls}>{label}</label>
-      <label className={`flex items-center gap-3 px-3 py-2.5 border-2 border-dashed rounded-xl cursor-pointer transition-all ${uploaded ? 'border-green-400 bg-green-50' : 'border-gray-200 hover:border-green-300 bg-gray-50'}`}>
-        {uploading ? <Loader2 className="w-4 h-4 animate-spin text-green-600" /> : uploaded ? <CheckCircle className="w-4 h-4 text-green-600" /> : <Upload className="w-4 h-4 text-gray-400" />}
-        <span className={`text-xs font-medium ${uploaded ? 'text-green-700' : 'text-gray-500'}`}>
-          {uploading ? 'Uploading…' : uploaded ? 'Uploaded ✓' : 'Click to choose file'}
-        </span>
-        <input type="file" accept={accept} onChange={handleChange} className="hidden" />
-      </label>
+      {uploading ? (
+        <div className="flex items-center gap-2 px-3 py-2.5 border-2 border-dashed border-green-300 rounded-xl bg-green-50">
+          <Loader2 className="w-4 h-4 animate-spin text-green-600" />
+          <span className="text-xs font-medium text-green-700">Uploading…</span>
+        </div>
+      ) : uploaded ? (
+        <div className="flex items-center gap-2 px-3 py-2.5 border-2 border-green-400 rounded-xl bg-green-50">
+          <CheckCircle className="w-4 h-4 text-green-600" />
+          <span className="text-xs font-medium text-green-700 flex-1">Uploaded ✓</span>
+          <button type="button" onClick={() => inputRef.current?.click()} className="text-[10px] text-green-600 underline">Replace</button>
+        </div>
+      ) : (
+        <button type="button" onClick={() => inputRef.current?.click()}
+          className="w-full flex items-center gap-3 px-3 py-2.5 border-2 border-dashed border-gray-200 rounded-xl hover:border-green-300 hover:bg-green-50 transition-all group">
+          <Upload className="w-4 h-4 text-gray-400 group-hover:text-green-500" />
+          <span className="text-xs font-medium text-gray-500 group-hover:text-green-700">Click to choose file</span>
+        </button>
+      )}
+      <input ref={inputRef} type="file" accept={accept} onChange={handleChange} className="hidden" />
     </div>
   );
 }
@@ -110,7 +126,7 @@ export default function LoansPageClient() {
   const role = user?.role ?? '';
   const canApprove  = role === 'branch_manager';
   const canDisburse = role === 'branch_manager' || role === 'accountant';
-  const canCreate   = role === 'branch_manager' || role === 'loan_officer';
+  const canCreate   = role === 'branch_manager' || role === 'loan_officer' || role === 'accountant';
 
   const [loanList,   setLoanList]   = useState<Loan[]>([]);
   const [memberList, setMemberList] = useState<Member[]>([]);
@@ -336,7 +352,6 @@ export default function LoansPageClient() {
                     <td className="px-5 py-3 font-mono font-semibold text-xs text-gray-700">{l.loan_number}</td>
                     <td className="px-4 py-3">
                       <p className="font-medium text-gray-900">{l.member_name}</p>
-                      <p className="text-xs text-gray-500">{l.group_name}</p>
                     </td>
                     <td className="px-4 py-3 hidden lg:table-cell">
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${TYPE_COLORS[l.loan_type] ?? 'bg-gray-100 text-gray-600'}`}>{l.loan_type?.replace(/_/g, ' ')}</span>
@@ -405,7 +420,7 @@ export default function LoansPageClient() {
                 <label className={labelCls}>Member <span className="text-red-500">*</span></label>
                 <select value={memberId} onChange={e => setMemberId(e.target.value)} className={inputCls}>
                   <option value="">— Select member —</option>
-                  {memberList.map(m => <option key={m.id} value={m.id}>{m.full_name} ({m.member_code}) — {m.group_name}</option>)}
+                  {memberList.map(m => <option key={m.id} value={m.id}>{m.full_name} ({m.member_code})</option>)}
                 </select>
               </div>
               <div>
@@ -474,6 +489,7 @@ export default function LoansPageClient() {
                 label="Next of Kin / Guarantor Photo"
                 accept="image/*"
                 onUploaded={setNokPhotoUrl}
+                onError={msg => setError(msg)}
                 uploading={uploadingNok}
                 setUploading={setUploadingNok}
                 uploaded={!!nokPhotoUrl}
@@ -482,6 +498,7 @@ export default function LoansPageClient() {
                 label="Supporting Document (PDF/Image)"
                 accept=".pdf,image/*"
                 onUploaded={setSupportingDocUrl}
+                onError={msg => setError(msg)}
                 uploading={uploadingDoc}
                 setUploading={setUploadingDoc}
                 uploaded={!!supportingDocUrl}
@@ -605,7 +622,7 @@ export default function LoansPageClient() {
           <div className="space-y-4 text-sm">
             <div className="grid grid-cols-2 gap-3">
               {[
-                ['Member', selected.member_name], ['Group', selected.group_name],
+                ['Member', selected.member_name],
                 ['Type', selected.loan_type?.replace(/_/g, ' ')], ['Status', selected.status],
                 ['Amount Applied', ugx(selected.amount_applied)], ['Approved', ugx(selected.approved_amount)],
                 ['Total Interest', ugx(selected.total_interest)], ['Total Repayable', ugx(selected.total_repayable)],

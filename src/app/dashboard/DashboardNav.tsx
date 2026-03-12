@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, Users, FolderOpen, CreditCard,
+  LayoutDashboard, Users, CreditCard,
   Banknote, BookOpen, BarChart3, FileText,
   Settings, LogOut, Menu, X, Bell,
   ChevronRight, Search, AlertCircle, UserCog, ClipboardList,
@@ -16,7 +16,6 @@ import { dashboard } from '@/lib/api';
 const NAV_MAIN = [
   { name: 'Dashboard', path: '/dashboard',  icon: LayoutDashboard },
   { name: 'Members',   path: '/members',    icon: Users },
-  { name: 'Groups',    path: '/groups',     icon: FolderOpen },
   { name: 'Loans',     path: '/loans',      icon: CreditCard },
   { name: 'Payments',  path: '/payments',   icon: Banknote },
   { name: 'Cashbook',  path: '/cashbook',   icon: BookOpen },

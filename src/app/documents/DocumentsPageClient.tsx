@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import {
   ChevronRight,
@@ -20,11 +20,14 @@ import {
   CheckCircle,
   AlertCircle,
   Loader2,
+  Camera,
+  ScanLine,
+  Plus,
 } from 'lucide-react';
 import { uploadFile, documents as docsApi } from '@/lib/api';
 
-// ── Types ────────────────────────────────────────────────────────────────────
-type DocCategory = 'kyc' | 'loan_agreement' | 'group_registration' | 'receipt' | 'other';
+// ── Types ─────────────────────────────────────────────────────────────────────
+type DocCategory = 'kyc' | 'loan_agreement' | 'receipt' | 'other';
 
 interface Doc {
   id: string;
@@ -40,9 +43,9 @@ interface Doc {
   created_at?: string;
 }
 
-// ── Helper ──────────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 function fmtSize(bytes?: number): string {
-  if (!bytes) return '—';
+  if (!bytes) return '';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -55,19 +58,46 @@ function guessType(fileType?: string, url?: string): 'pdf' | 'image' | 'doc' {
   return 'doc';
 }
 
-// ── Sub-components at FILE SCOPE (prevents focus loss) ────────────────────
+function getFileExtension(fileType?: string, url?: string): string {
+  if (fileType) {
+    const parts = fileType.split('/');
+    const ext = parts[parts.length - 1].replace('jpeg', 'jpg');
+    if (ext && ext.length <= 5) return ext.toUpperCase();
+  }
+  if (url) {
+    const match = url.split('?')[0].match(/\.([a-z0-9]+)$/i);
+    if (match) return match[1].toUpperCase();
+  }
+  return 'FILE';
+}
+
+// ── Download helper (works cross-origin) ─────────────────────────────────────
+async function triggerDownload(doc: Doc) {
+  try {
+    const res = await fetch(doc.file_url);
+    if (!res.ok) throw new Error('fetch failed');
+    const blob = await res.blob();
+    const objUrl = URL.createObjectURL(blob);
+    const ext = doc.file_type ? '.' + doc.file_type.split('/').pop()?.replace('jpeg', 'jpg') : '';
+    const a = document.createElement('a');
+    a.href = objUrl;
+    a.download = doc.name + ext;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(objUrl);
+  } catch {
+    // Fallback: open in new tab
+    window.open(doc.file_url, '_blank');
+  }
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
 function Modal({
-  title,
-  subtitle,
-  onClose,
-  children,
-  footer,
+  title, subtitle, onClose, children, footer,
 }: {
-  title: string;
-  subtitle?: string;
-  onClose: () => void;
-  children: React.ReactNode;
-  footer?: React.ReactNode;
+  title: string; subtitle?: string; onClose: () => void;
+  children: React.ReactNode; footer?: React.ReactNode;
 }) {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -77,10 +107,7 @@ function Modal({
             <h2 className="text-lg font-bold text-gray-900">{title}</h2>
             {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-          >
+          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -95,44 +122,150 @@ function Modal({
   );
 }
 
+// ── Category config ───────────────────────────────────────────────────────────
 const categoryConfig: Record<DocCategory, { label: string; className: string }> = {
-  kyc:               { label: 'KYC',               className: 'bg-blue-50 text-blue-700 border border-blue-200' },
-  loan_agreement:    { label: 'Loan Agreement',    className: 'bg-purple-50 text-purple-700 border border-purple-200' },
-  group_registration:{ label: 'Group Registration',className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
-  receipt:           { label: 'Receipt',           className: 'bg-green-50 text-green-700 border border-green-200' },
-  other:             { label: 'Other',             className: 'bg-gray-50 text-gray-600 border border-gray-200' },
+  kyc:            { label: 'KYC',           className: 'bg-blue-50 text-blue-700 border border-blue-200' },
+  loan_agreement: { label: 'Loan Agreement', className: 'bg-purple-50 text-purple-700 border border-purple-200' },
+  receipt:        { label: 'Receipt',        className: 'bg-green-50 text-green-700 border border-green-200' },
+  other:          { label: 'Other',          className: 'bg-gray-50 text-gray-600 border border-gray-200' },
 };
 
-function FileIcon({ type }: { type: 'pdf' | 'image' | 'doc' }) {
-  if (type === 'image') return <Image className="w-4 h-4 text-blue-500" />;
-  if (type === 'pdf')   return <File  className="w-4 h-4 text-red-500"  />;
-  return <FileText className="w-4 h-4 text-gray-500" />;
+// ── Document Card ─────────────────────────────────────────────────────────────
+function DocCard({
+  doc, onView, onDownload, onDelete, deleting,
+}: {
+  doc: Doc;
+  onView: () => void;
+  onDownload: () => void;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
+  const fType   = guessType(doc.file_type, doc.file_url);
+  const catCfg  = categoryConfig[doc.category] ?? categoryConfig.other;
+  const ext     = getFileExtension(doc.file_type, doc.file_url);
+  const expired = doc.expiry_date && new Date(doc.expiry_date) < new Date();
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col overflow-hidden">
+      {/* Thumbnail / icon area */}
+      <div className="relative h-36 bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center overflow-hidden">
+        {fType === 'image' ? (
+          <img
+            src={doc.file_url}
+            alt={doc.name}
+            className="w-full h-full object-cover"
+            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+        ) : fType === 'pdf' ? (
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-14 h-16 bg-red-500 rounded-lg flex items-center justify-center shadow-md">
+              <span className="text-white text-xs font-black tracking-wide">PDF</span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-14 h-16 bg-blue-500 rounded-lg flex items-center justify-center shadow-md">
+              <span className="text-white text-[10px] font-black tracking-wide">{ext}</span>
+            </div>
+          </div>
+        )}
+        {/* Expired badge */}
+        {expired && (
+          <div className="absolute top-2 right-2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+            Expired
+          </div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="p-3 flex-1 flex flex-col gap-2">
+        <p className="text-sm font-bold text-gray-900 line-clamp-2 leading-snug">{doc.name}</p>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${catCfg.className}`}>
+            {catCfg.label}
+          </span>
+          {doc.file_size && (
+            <span className="text-[10px] text-gray-400">{fmtSize(doc.file_size)}</span>
+          )}
+        </div>
+        {doc.related_to && (
+          <p className="text-[11px] text-gray-500 truncate">
+            <span className="text-gray-400">For: </span>{doc.related_to}
+          </p>
+        )}
+        <p className="text-[11px] text-gray-400 mt-auto">
+          {doc.created_at ? doc.created_at.slice(0, 10) : '—'}
+          {doc.uploaded_by_name && ` · ${doc.uploaded_by_name}`}
+        </p>
+        {doc.expiry_date && (
+          <p className={`text-[10px] font-medium ${expired ? 'text-red-600' : 'text-amber-600'}`}>
+            Expires: {doc.expiry_date}
+          </p>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div className="border-t border-gray-100 flex divide-x divide-gray-100">
+        <button
+          onClick={onView}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+          title="View"
+        >
+          <Eye className="w-3.5 h-3.5" />
+          View
+        </button>
+        <button
+          onClick={onDownload}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-gray-500 hover:text-green-600 hover:bg-green-50 transition-colors"
+          title="Download"
+        >
+          <Download className="w-3.5 h-3.5" />
+          Download
+        </button>
+        <button
+          onClick={onDelete}
+          disabled={deleting}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
+          title="Delete"
+        >
+          {deleting
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            : <Trash2 className="w-3.5 h-3.5" />}
+          Delete
+        </button>
+      </div>
+    </div>
+  );
 }
 
-// ── Main Page ────────────────────────────────────────────────────────────────
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function DocumentsPageClient() {
-  const [docs, setDocs]                 = useState<Doc[]>([]);
-  const [loading, setLoading]           = useState(true);
-  const [searchQuery, setSearchQuery]   = useState('');
+  const [docs, setDocs]                     = useState<Doc[]>([]);
+  const [loading, setLoading]               = useState(true);
+  const [searchQuery, setSearchQuery]       = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'all' | DocCategory>('all');
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [deletingId, setDeletingId]     = useState<string | null>(null);
+  const [deletingId, setDeletingId]         = useState<string | null>(null);
 
   // Upload form state
-  const [upName, setUpName]             = useState('');
-  const [upCategory, setUpCategory]     = useState<DocCategory | ''>('');
-  const [upRelatedTo, setUpRelatedTo]   = useState('');
-  const [upRelatedId, setUpRelatedId]   = useState('');
-  const [upExpiry, setUpExpiry]         = useState('');
-  const [upFileUrl, setUpFileUrl]       = useState('');
-  const [upFileSize, setUpFileSize]     = useState(0);
-  const [upFileType, setUpFileType]     = useState('');
-  const [upUploading, setUpUploading]   = useState(false);
-  const [upSaving, setUpSaving]         = useState(false);
-  const [upError, setUpError]           = useState('');
-  const [upSuccess, setUpSuccess]       = useState(false);
+  const [upName, setUpName]         = useState('');
+  const [upCategory, setUpCategory] = useState<DocCategory | ''>('');
+  const [upRelatedTo, setUpRelatedTo] = useState('');
+  const [upRelatedId, setUpRelatedId] = useState('');
+  const [upExpiry, setUpExpiry]     = useState('');
+  const [upFileUrl, setUpFileUrl]   = useState('');
+  const [upFileSize, setUpFileSize] = useState(0);
+  const [upFileType, setUpFileType] = useState('');
+  const [upUploading, setUpUploading] = useState(false);
+  const [upSaving, setUpSaving]     = useState(false);
+  const [upError, setUpError]       = useState('');
+  const [upSuccess, setUpSuccess]   = useState(false);
 
-  // ── Fetch documents ────────────────────────────────────────────────────────
+  // Camera/scan refs (two separate inputs)
+  const fileInputRef   = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Fetch ────────────────────────────────────────────────────────────────
   const fetchDocs = useCallback(async () => {
     setLoading(true);
     try {
@@ -140,26 +273,23 @@ export default function DocumentsPageClient() {
       if (searchQuery) params.search = searchQuery;
       if (categoryFilter !== 'all') params.category = categoryFilter;
       const res = await docsApi.getAll(params);
-      const rows = (res as { data?: unknown[]; rows?: unknown[] }).data
-        ?? (res as { data?: unknown[]; rows?: unknown[] }).rows
+      const rows = (res as { data?: unknown[] }).data
         ?? (Array.isArray(res) ? (res as unknown[]) : []);
       setDocs(rows as Doc[]);
-    } catch {
-      // keep empty
-    } finally {
-      setLoading(false);
-    }
+    } catch { /* keep empty */ }
+    finally { setLoading(false); }
   }, [searchQuery, categoryFilter]);
 
   useEffect(() => { fetchDocs(); }, [fetchDocs]);
 
-  // ── Handle file pick → upload ──────────────────────────────────────────────
+  // ── File/Camera upload handler ──────────────────────────────────────────
   const handleFilePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Reset input so same file can be re-selected
+    e.target.value = '';
     setUpError('');
     setUpUploading(true);
-    // Auto-fill name if empty
     if (!upName) setUpName(file.name.replace(/\.[^.]+$/, ''));
     try {
       const { url, size } = await uploadFile(file);
@@ -173,10 +303,10 @@ export default function DocumentsPageClient() {
     }
   };
 
-  // ── Submit document metadata ───────────────────────────────────────────────
+  // ── Submit ────────────────────────────────────────────────────────────────
   const handleUploadSubmit = async () => {
-    if (!upFileUrl) { setUpError('Please select a file to upload.'); return; }
-    if (!upCategory) { setUpError('Please choose a category.'); return; }
+    if (!upFileUrl)     { setUpError('Please select or capture a file first.'); return; }
+    if (!upCategory)    { setUpError('Please choose a category.'); return; }
     if (!upName.trim()) { setUpError('Please enter a document name.'); return; }
     setUpError('');
     setUpSaving(true);
@@ -196,7 +326,7 @@ export default function DocumentsPageClient() {
         setShowUploadModal(false);
         resetUploadForm();
         fetchDocs();
-      }, 1000);
+      }, 900);
     } catch (err: unknown) {
       setUpError(err instanceof Error ? err.message : 'Failed to save document');
     } finally {
@@ -210,7 +340,7 @@ export default function DocumentsPageClient() {
     setUpUploading(false); setUpSaving(false); setUpError(''); setUpSuccess(false);
   };
 
-  // ── Delete document ────────────────────────────────────────────────────────
+  // ── Delete ────────────────────────────────────────────────────────────────
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this document? This cannot be undone.')) return;
     setDeletingId(id);
@@ -224,7 +354,7 @@ export default function DocumentsPageClient() {
     }
   };
 
-  // ── Derived data ────────────────────────────────────────────────────────────
+  // ── Derived data ──────────────────────────────────────────────────────────
   const filtered = docs.filter(d => {
     const q = searchQuery.toLowerCase();
     const matchSearch = !q
@@ -242,7 +372,7 @@ export default function DocumentsPageClient() {
     expired:    docs.filter(d => d.expiry_date && new Date(d.expiry_date) < new Date()).length,
   };
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
       {/* Page Header */}
@@ -257,28 +387,26 @@ export default function DocumentsPageClient() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900">Document Management</h1>
-              <p className="text-xs text-gray-500 mt-0.5">Store and manage KYC, agreements, and receipts</p>
+              <p className="text-xs text-gray-500 mt-0.5">Store, view and manage KYC, agreements and receipts</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => { resetUploadForm(); setShowUploadModal(true); }}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-sm hover:shadow-md transition-all"
-            >
-              <Upload className="w-4 h-4" />
-              Upload Document
-            </button>
-          </div>
+          <button
+            onClick={() => { resetUploadForm(); setShowUploadModal(true); }}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-sm hover:shadow-md transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Upload Document
+          </button>
         </div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         {[
-          { icon: FolderOpen, color: 'teal', val: stats.total,      label: 'Total Documents',     sub: 'All files' },
-          { icon: User,       color: 'blue', val: stats.kyc,        label: 'KYC Documents',       sub: 'Member IDs & photos' },
-          { icon: FileText,   color: 'purple',val: stats.agreements,label: 'Loan Agreements',     sub: 'Signed agreements' },
-          { icon: Calendar,   color: 'red',  val: stats.expired,    label: 'Expired Documents',   sub: 'Need renewal' },
+          { icon: FolderOpen, color: 'teal',   val: stats.total,      label: 'Total Documents',  sub: 'All files' },
+          { icon: User,       color: 'blue',   val: stats.kyc,        label: 'KYC Documents',    sub: 'IDs & photos' },
+          { icon: FileText,   color: 'purple', val: stats.agreements, label: 'Loan Agreements',  sub: 'Signed agreements' },
+          { icon: Calendar,   color: 'red',    val: stats.expired,    label: 'Expired',           sub: 'Need renewal' },
         ].map(({ icon: Icon, color, val, label, sub }) => (
           <div key={label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -302,20 +430,19 @@ export default function DocumentsPageClient() {
               type="text"
               placeholder="Search by name, member, or ID..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={e => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50 focus:bg-white transition-colors"
             />
           </div>
           <div className="flex items-center gap-2">
             <select
               value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value as typeof categoryFilter)}
+              onChange={e => setCategoryFilter(e.target.value as typeof categoryFilter)}
               className="text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 bg-gray-50 text-gray-700"
             >
               <option value="all">All Categories</option>
               <option value="kyc">KYC</option>
               <option value="loan_agreement">Loan Agreements</option>
-              <option value="group_registration">Group Registration</option>
               <option value="receipt">Receipts</option>
               <option value="other">Other</option>
             </select>
@@ -330,138 +457,59 @@ export default function DocumentsPageClient() {
         </div>
       </div>
 
-      {/* Documents Table */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
-          <div>
-            <h2 className="text-sm font-bold text-gray-900">Document Library</h2>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {loading ? 'Loading…' : `${filtered.length} document${filtered.length !== 1 ? 's' : ''}`}
-            </p>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                <th className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500">Document</th>
-                <th className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500">Category</th>
-                <th className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500">Related To</th>
-                <th className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500">Uploaded</th>
-                <th className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500">Expiry</th>
-                <th className="px-5 py-2.5 text-center text-xs font-semibold text-gray-500">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-5 py-12 text-center">
-                    <Loader2 className="w-6 h-6 animate-spin text-green-600 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500">Loading documents…</p>
-                  </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-5 py-12 text-center">
-                    <p className="text-sm font-medium text-gray-500">No documents found</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {docs.length === 0
-                        ? 'Upload your first document using the button above'
-                        : 'Try adjusting your search or filter'}
-                    </p>
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((doc) => {
-                  const catCfg  = categoryConfig[doc.category] ?? categoryConfig.other;
-                  const fType   = guessType(doc.file_type, doc.file_url);
-                  const expired = doc.expiry_date && new Date(doc.expiry_date) < new Date();
-                  return (
-                    <tr key={doc.id} className="hover:bg-gray-50/60 transition-colors">
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2.5">
-                          <FileIcon type={fType} />
-                          <div>
-                            <p className="text-xs font-semibold text-gray-900 max-w-xs truncate">{doc.name}</p>
-                            <p className="text-[11px] text-gray-400">
-                              {fmtSize(doc.file_size)} · {(doc.file_type ?? fType).toUpperCase()}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${catCfg.className}`}>
-                          {catCfg.label}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3">
-                        {doc.related_to
-                          ? <><p className="text-xs text-gray-700">{doc.related_to}</p><p className="text-[11px] text-gray-400">{doc.related_id}</p></>
-                          : <span className="text-xs text-gray-400">—</span>
-                        }
-                      </td>
-                      <td className="px-5 py-3">
-                        <p className="text-xs text-gray-600">{doc.created_at ? doc.created_at.slice(0, 10) : '—'}</p>
-                        {doc.uploaded_by_name && (
-                          <p className="text-[11px] text-gray-400">by {doc.uploaded_by_name}</p>
-                        )}
-                      </td>
-                      <td className="px-5 py-3">
-                        {doc.expiry_date ? (
-                          <span className={`text-xs ${expired ? 'text-red-600 font-semibold' : 'text-gray-600'}`}>
-                            {doc.expiry_date}
-                            {expired && ' (Expired)'}
-                          </span>
-                        ) : (
-                          <span className="text-gray-300">—</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center justify-center gap-1">
-                          <a
-                            href={doc.file_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                            title="View"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </a>
-                          <a
-                            href={doc.file_url}
-                            download
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors"
-                            title="Download"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                          </a>
-                          <button
-                            onClick={() => handleDelete(doc.id)}
-                            disabled={deletingId === doc.id}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
-                            title="Delete"
-                          >
-                            {deletingId === doc.id
-                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              : <Trash2 className="w-3.5 h-3.5" />
-                            }
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+      {/* Document Grid */}
+      <div className="mb-2 flex items-center justify-between px-1">
+        <p className="text-sm font-bold text-gray-700">
+          Document Library
+          <span className="ml-2 text-xs font-normal text-gray-400">
+            {loading ? 'Loading…' : `${filtered.length} document${filtered.length !== 1 ? 's' : ''}`}
+          </span>
+        </p>
       </div>
+
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 animate-spin text-green-600 mb-3" />
+          <p className="text-sm text-gray-500">Loading documents…</p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-gray-100 shadow-sm">
+          <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
+            <FileText className="w-8 h-8 text-gray-300" />
+          </div>
+          <p className="text-base font-bold text-gray-500">No documents found</p>
+          <p className="text-xs text-gray-400 mt-1">
+            {docs.length === 0 ? 'Upload your first document using the button above' : 'Try adjusting your search or filter'}
+          </p>
+          {docs.length === 0 && (
+            <button
+              onClick={() => { resetUploadForm(); setShowUploadModal(true); }}
+              className="mt-4 flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
+            >
+              <Upload className="w-4 h-4" /> Upload First Document
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filtered.map(doc => (
+            <DocCard
+              key={doc.id}
+              doc={doc}
+              onView={() => window.open(doc.file_url, '_blank')}
+              onDownload={() => triggerDownload(doc)}
+              onDelete={() => handleDelete(doc.id)}
+              deleting={deletingId === doc.id}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Upload Modal */}
       {showUploadModal && (
         <Modal
           title="Upload Document"
-          subtitle="Supports PDF, JPG, PNG files up to 10 MB"
+          subtitle="Choose a file, or use your camera to scan"
           onClose={() => { setShowUploadModal(false); resetUploadForm(); }}
           footer={
             <div className="flex items-center justify-end gap-3">
@@ -478,9 +526,9 @@ export default function DocumentsPageClient() {
                 disabled={upSaving || upUploading || upSuccess}
                 className="flex items-center gap-2 px-6 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-60"
               >
-                {upSaving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> :
-                 upSuccess ? <><CheckCircle className="w-4 h-4" /> Saved!</> :
-                 <><Upload className="w-4 h-4" /> Upload</>}
+                {upSaving   ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> :
+                 upSuccess  ? <><CheckCircle className="w-4 h-4" /> Saved!</> :
+                              <><Upload className="w-4 h-4" /> Upload</>}
               </button>
             </div>
           }
@@ -493,6 +541,110 @@ export default function DocumentsPageClient() {
             </div>
           )}
 
+          {/* File / Camera selection */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-2">
+              File <span className="text-red-500">*</span>
+            </label>
+
+            {/* Preview if already uploaded */}
+            {upFileUrl ? (
+              <div className="flex items-center gap-3 p-3 bg-green-50 border-2 border-green-400 rounded-xl mb-3">
+                {guessType(upFileType, upFileUrl) === 'image' ? (
+                  <img src={upFileUrl} alt="preview" className="w-12 h-12 rounded-lg object-cover shrink-0 border border-green-200" />
+                ) : (
+                  <div className="w-12 h-12 rounded-lg bg-green-600 flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5 text-white" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-green-700">File uploaded ✓</p>
+                  {upFileSize > 0 && <p className="text-[11px] text-green-600">{fmtSize(upFileSize)}</p>}
+                </div>
+                <button
+                  onClick={() => { setUpFileUrl(''); setUpFileSize(0); setUpFileType(''); }}
+                  className="p-1 text-green-400 hover:text-green-700 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : upUploading ? (
+              <div className="flex items-center justify-center gap-2 p-6 bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl mb-3">
+                <Loader2 className="w-5 h-5 animate-spin text-green-600" />
+                <p className="text-sm font-medium text-green-700">Uploading…</p>
+              </div>
+            ) : null}
+
+            {/* Two-button picker: Browse + Scan */}
+            {!upUploading && !upFileUrl && (
+              <div className="flex gap-2">
+                {/* Browse files */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-1 flex flex-col items-center justify-center gap-2 py-5 border-2 border-dashed border-gray-200 rounded-xl hover:border-green-400 hover:bg-green-50 transition-all cursor-pointer group"
+                >
+                  <Upload className="w-6 h-6 text-gray-300 group-hover:text-green-500 transition-colors" />
+                  <div className="text-center">
+                    <p className="text-xs font-semibold text-gray-600 group-hover:text-green-700">Browse Files</p>
+                    <p className="text-[10px] text-gray-400">PDF, JPG, PNG</p>
+                  </div>
+                </button>
+
+                {/* Camera / Scan */}
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="flex-1 flex flex-col items-center justify-center gap-2 py-5 border-2 border-dashed border-gray-200 rounded-xl hover:border-teal-400 hover:bg-teal-50 transition-all cursor-pointer group"
+                >
+                  <ScanLine className="w-6 h-6 text-gray-300 group-hover:text-teal-500 transition-colors" />
+                  <div className="text-center">
+                    <p className="text-xs font-semibold text-gray-600 group-hover:text-teal-700">Scan / Camera</p>
+                    <p className="text-[10px] text-gray-400">Use device camera</p>
+                  </div>
+                </button>
+              </div>
+            )}
+
+            {/* Replace button after upload */}
+            {upFileUrl && !upUploading && (
+              <div className="flex gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-1 text-center py-1.5 text-xs font-semibold text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Replace with file
+                </button>
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="flex-1 text-center py-1.5 text-xs font-semibold text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Re-scan
+                </button>
+              </div>
+            )}
+
+            {/* Hidden inputs */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.webp"
+              onChange={handleFilePick}
+              className="hidden"
+            />
+            {/* Camera input: capture="environment" = back camera (ideal for scanning docs) */}
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleFilePick}
+              className="hidden"
+            />
+          </div>
+
           {/* Document Name */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1.5">
@@ -502,7 +654,7 @@ export default function DocumentsPageClient() {
               type="text"
               value={upName}
               onChange={e => setUpName(e.target.value)}
-              placeholder="e.g. National ID – Nakafeero Agnes"
+              placeholder="e.g. National ID – Agnes Nakafeero"
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50 focus:bg-white"
             />
           </div>
@@ -520,7 +672,6 @@ export default function DocumentsPageClient() {
               <option value="">Select category…</option>
               <option value="kyc">KYC Document</option>
               <option value="loan_agreement">Loan Agreement</option>
-              <option value="group_registration">Group Registration</option>
               <option value="receipt">Receipt</option>
               <option value="other">Other</option>
             </select>
@@ -534,7 +685,7 @@ export default function DocumentsPageClient() {
                 type="text"
                 value={upRelatedTo}
                 onChange={e => setUpRelatedTo(e.target.value)}
-                placeholder="e.g. Nakafeero Agnes"
+                placeholder="e.g. Agnes Nakafeero"
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 bg-gray-50 focus:bg-white"
               />
             </div>
@@ -552,49 +703,13 @@ export default function DocumentsPageClient() {
 
           {/* Expiry Date */}
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Expiry Date (if applicable)</label>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Expiry Date (optional)</label>
             <input
               type="date"
               value={upExpiry}
               onChange={e => setUpExpiry(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 bg-gray-50 focus:bg-white"
             />
-          </div>
-
-          {/* File Upload Area */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-              File <span className="text-red-500">*</span>
-            </label>
-            <label className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-6 cursor-pointer transition-colors
-              ${upFileUrl ? 'border-green-400 bg-green-50' : 'border-gray-200 hover:border-green-400 bg-gray-50'}`}>
-              {upUploading ? (
-                <>
-                  <Loader2 className="w-7 h-7 animate-spin text-green-600 mb-2" />
-                  <p className="text-sm font-medium text-green-700">Uploading…</p>
-                </>
-              ) : upFileUrl ? (
-                <>
-                  <CheckCircle className="w-7 h-7 text-green-600 mb-2" />
-                  <p className="text-sm font-semibold text-green-700">File uploaded!</p>
-                  <p className="text-xs text-green-600 mt-0.5">{fmtSize(upFileSize)}</p>
-                  <p className="text-[11px] text-gray-400 mt-1">Click to replace</p>
-                </>
-              ) : (
-                <>
-                  <Upload className="w-7 h-7 text-gray-300 mb-2" />
-                  <p className="text-sm font-medium text-gray-600">Click or drag file to upload</p>
-                  <p className="text-xs text-gray-400 mt-1">PDF, JPG, PNG up to 10 MB</p>
-                </>
-              )}
-              <input
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
-                onChange={handleFilePick}
-                className="hidden"
-                disabled={upUploading}
-              />
-            </label>
           </div>
         </Modal>
       )}
