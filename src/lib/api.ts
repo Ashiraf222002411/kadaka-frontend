@@ -44,7 +44,22 @@ export async function uploadFile(file: File): Promise<{ url: string; filename: s
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string }).error ?? 'Upload failed');
-  return data as { url: string; filename: string; size: number };
+  const result = data as { url: string; filename: string; size: number };
+  // Backend returns relative path — convert to absolute URL
+  const url = result.url?.startsWith('/') ? `${BASE}${result.url}` : result.url;
+  return { ...result, url };
+}
+
+// ── Resolve file URLs (fixes old localhost:PORT URLs stored in DB) ────────────
+export function resolveFileUrl(url: string | undefined | null): string {
+  if (!url) return '';
+  // Relative path (e.g. /uploads/filename.jpg)
+  if (url.startsWith('/uploads/')) return `${BASE}${url}`;
+  // Old stored localhost URLs (e.g. http://localhost:8080/uploads/...)
+  if (/^https?:\/\/localhost:\d+\//.test(url)) {
+    return `${BASE}${url.replace(/^https?:\/\/localhost:\d+/, '')}`;
+  }
+  return url;
 }
 
 // ── Auth ────────────────────────────────────────────────────────────────────

@@ -24,7 +24,7 @@ import {
   ScanLine,
   Plus,
 } from 'lucide-react';
-import { uploadFile, documents as docsApi } from '@/lib/api';
+import { uploadFile, documents as docsApi, resolveFileUrl } from '@/lib/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type DocCategory = 'kyc' | 'loan_agreement' | 'receipt' | 'other';
@@ -73,8 +73,9 @@ function getFileExtension(fileType?: string, url?: string): string {
 
 // ── Download helper (works cross-origin) ─────────────────────────────────────
 async function triggerDownload(doc: Doc) {
+  const url = resolveFileUrl(doc.file_url);
   try {
-    const res = await fetch(doc.file_url);
+    const res = await fetch(url);
     if (!res.ok) throw new Error('fetch failed');
     const blob = await res.blob();
     const objUrl = URL.createObjectURL(blob);
@@ -88,7 +89,7 @@ async function triggerDownload(doc: Doc) {
     URL.revokeObjectURL(objUrl);
   } catch {
     // Fallback: open in new tab
-    window.open(doc.file_url, '_blank');
+    window.open(url, '_blank');
   }
 }
 
@@ -151,7 +152,7 @@ function DocCard({
       <div className="relative h-36 bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center overflow-hidden">
         {fType === 'image' ? (
           <img
-            src={doc.file_url}
+            src={resolveFileUrl(doc.file_url)}
             alt={doc.name}
             className="w-full h-full object-cover"
             onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
@@ -496,7 +497,7 @@ export default function DocumentsPageClient() {
             <DocCard
               key={doc.id}
               doc={doc}
-              onView={() => window.open(doc.file_url, '_blank')}
+              onView={() => window.open(resolveFileUrl(doc.file_url), '_blank')}
               onDownload={() => triggerDownload(doc)}
               onDelete={() => handleDelete(doc.id)}
               deleting={deletingId === doc.id}
@@ -551,7 +552,7 @@ export default function DocumentsPageClient() {
             {upFileUrl ? (
               <div className="flex items-center gap-3 p-3 bg-green-50 border-2 border-green-400 rounded-xl mb-3">
                 {guessType(upFileType, upFileUrl) === 'image' ? (
-                  <img src={upFileUrl} alt="preview" className="w-12 h-12 rounded-lg object-cover shrink-0 border border-green-200" />
+                  <img src={resolveFileUrl(upFileUrl)} alt="preview" className="w-12 h-12 rounded-lg object-cover shrink-0 border border-green-200" />
                 ) : (
                   <div className="w-12 h-12 rounded-lg bg-green-600 flex items-center justify-center shrink-0">
                     <FileText className="w-5 h-5 text-white" />
@@ -626,13 +627,13 @@ export default function DocumentsPageClient() {
               </div>
             )}
 
-            {/* Hidden inputs */}
+            {/* Visually hidden but accessible — sr-only allows .click() on mobile */}
             <input
               ref={fileInputRef}
               type="file"
               accept=".pdf,.jpg,.jpeg,.png,.webp"
               onChange={handleFilePick}
-              className="hidden"
+              className="sr-only"
             />
             {/* Camera input: capture="environment" = back camera (ideal for scanning docs) */}
             <input
@@ -641,7 +642,7 @@ export default function DocumentsPageClient() {
               accept="image/*"
               capture="environment"
               onChange={handleFilePick}
-              className="hidden"
+              className="sr-only"
             />
           </div>
 

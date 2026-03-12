@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, Search, X, CheckCircle, Loader2, AlertCircle, RefreshCw, User, Eye, Upload, Camera, ScanLine, Pencil, Trash2 } from 'lucide-react';
-import { members, uploadFile } from '@/lib/api';
+import { members, uploadFile, resolveFileUrl } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 
 type Member = {
@@ -76,9 +76,9 @@ function FileUploadBtn({ label, accept, uploaded, uploading, onChange, captureMo
           )}
         </div>
       )}
-      <input ref={fileRef} type="file" accept={accept} onChange={onChange} className="hidden" />
+      <input ref={fileRef} type="file" accept={accept} onChange={onChange} className="sr-only" />
       {captureMode && (
-        <input ref={cameraRef} type="file" accept="image/*" capture={captureMode} onChange={onChange} className="hidden" />
+        <input ref={cameraRef} type="file" accept="image/*" capture={captureMode} onChange={onChange} className="sr-only" />
       )}
     </div>
   );
@@ -266,7 +266,7 @@ export default function MembersPageClient() {
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center shrink-0 overflow-hidden">
                           {m.photo_url
-                            ? <img src={m.photo_url} alt="" className="w-full h-full object-cover" />
+                            ? <img src={resolveFileUrl(m.photo_url)} alt="" className="w-full h-full object-cover" />
                             : <span className="text-[10px] font-bold text-white">{m.full_name?.split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase()}</span>}
                         </div>
                         <div><p className="font-semibold text-gray-900">{m.full_name}</p><p className="text-xs text-gray-500 font-mono">{m.member_code}</p></div>
@@ -319,7 +319,7 @@ export default function MembersPageClient() {
                     </div>
                   ) : f.photo_url ? (
                     <div className="flex items-center gap-3 px-3 py-2.5 border-2 border-green-400 rounded-xl bg-green-50">
-                      <img src={f.photo_url} alt="" className="w-9 h-9 rounded-full object-cover shrink-0 border-2 border-green-300" />
+                      <img src={resolveFileUrl(f.photo_url)} alt="" className="w-9 h-9 rounded-full object-cover shrink-0 border-2 border-green-300" />
                       <span className="text-xs font-medium text-green-700 flex-1">Photo uploaded ✓</span>
                       <button type="button" onClick={() => photoFileRef.current?.click()} className="text-[10px] text-green-600 underline">Replace</button>
                     </div>
@@ -338,9 +338,9 @@ export default function MembersPageClient() {
                     </div>
                   )}
                   {/* Browse — no capture (file picker) */}
-                  <input ref={photoFileRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+                  <input ref={photoFileRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="sr-only" />
                   {/* Camera — capture="user" = front camera on mobile */}
-                  <input ref={photoCameraRef} type="file" accept="image/*" capture="user" onChange={handlePhotoUpload} className="hidden" />
+                  <input ref={photoCameraRef} type="file" accept="image/*" capture="user" onChange={handlePhotoUpload} className="sr-only" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2"><label className={lc}>Full Name *</label><input value={f.full_name} onChange={upd('full_name')} placeholder="First Last" className={ic} /></div>
@@ -464,7 +464,7 @@ export default function MembersPageClient() {
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center overflow-hidden">
-                  {sel.photo_url ? <img src={sel.photo_url} alt="" className="w-full h-full object-cover" /> : <User className="w-5 h-5 text-white" />}
+                  {sel.photo_url ? <img src={resolveFileUrl(sel.photo_url)} alt="" className="w-full h-full object-cover" /> : <User className="w-5 h-5 text-white" />}
                 </div>
                 <div><h3 className="font-bold text-gray-900">{sel.full_name}</h3><p className="text-xs text-gray-500 font-mono">{sel.member_code}</p></div>
               </div>
@@ -479,7 +479,7 @@ export default function MembersPageClient() {
               {sel.supporting_doc_url && (
                 <div className="mt-4">
                   <p className="text-xs font-semibold text-gray-500 mb-2">Supporting Document</p>
-                  <a href={sel.supporting_doc_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-xl text-xs font-semibold hover:bg-blue-100 transition-colors">
+                  <a href={resolveFileUrl(sel.supporting_doc_url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-xl text-xs font-semibold hover:bg-blue-100 transition-colors">
                     📄 View Document
                   </a>
                 </div>
