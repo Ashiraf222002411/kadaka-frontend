@@ -32,6 +32,7 @@ export function useWebRTC(socket: Socket | null, myUserId: string) {
   const [isMuted,    setIsMuted]    = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
+  const [isFrontCamera, setIsFrontCamera] = useState(true);
 
   const pcRef          = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -60,10 +61,14 @@ export function useWebRTC(socket: Socket | null, myUserId: string) {
   }, []);
 
   // ── Acquire media ─────────────────────────────────────────────────────────
-  const getMedia = useCallback(async (callType: 'video' | 'audio') => {
+  const getMedia = useCallback(async (callType: 'video' | 'audio', front = true) => {
+    // Use 'ideal' not 'exact' so it falls back gracefully on devices with only one camera
+    const videoConstraint = callType === 'video'
+      ? { facingMode: { ideal: front ? 'user' : 'environment' } }
+      : false;
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: true,
-      video: callType === 'video' ? { facingMode: 'user' } : false,
+      video: videoConstraint,
     });
     localStreamRef.current = stream;
     if (localVideoRef.current) localVideoRef.current.srcObject = stream;
@@ -122,13 +127,13 @@ export function useWebRTC(socket: Socket | null, myUserId: string) {
     setCallState('connecting');
     socket.emit('call:accept', { to: callParty.userId, callType: callParty.callType });
 
-    const stream = await getMedia(callParty.callType).catch(() => null);
+    const stream = await getMedia(callParty.callType, isFrontCamera).catch(() => null);
     if (!stream) { cleanup(); return; }
 
     const pc = createPc(callParty.userId);
     stream.getTracks().forEach(t => pc.addTrack(t, stream));
     // The caller will now send us an offer (triggered by our call:accept)
-  }, [socket, callParty, getMedia, createPc, cleanup]);
+  }, [socket, callParty, getMedia, createPc, cleanup, isFrontCamera]);
 
   // ── Public API: reject / hang up ──────────────────────────────────────────
   const rejectCall = useCallback(() => {
@@ -143,7 +148,7 @@ export function useWebRTC(socket: Socket | null, myUserId: string) {
     cleanup();
   }, [socket, callParty, cleanup]);
 
-  // ── Public API: mute / video toggle ───────────────────────────────────────
+  // ── Public API: mute / video / camera flip ────────────────────────────────
   const toggleMute = useCallback(() => {
     localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = isMuted; });
     setIsMuted(v => !v);
@@ -153,6 +158,26 @@ export function useWebRTC(socket: Socket | null, myUserId: string) {
     localStreamRef.current?.getVideoTracks().forEach(t => { t.enabled = isVideoOff; });
     setIsVideoOff(v => !v);
   }, [isVideoOff]);
+
+  const flipCamera = useCallback(async () => {
+    if (!callParty || callParty.callType !== 'video' || !pcRef.current) return;
+    const newFront = !isFrontCamera;
+    setIsFrontCamera(newFront);
+
+    // Stop existing video track
+    localStreamRef.current?.getVideoTracks().forEach(t => t.stop());
+
+    // Get new stream with flipped camera
+    const newStream = await getMedia('video', newFront).catch(() => null);
+    if (!newStream) return;
+
+    // Replace video track in the peer connection
+    const [newVideoTrack] = newStream.getVideoTracks();
+    if (newVideoTrack) {
+      const sender = pcRef.current.getSenders().find(s => s.track?.kind === 'video');
+      if (sender) sender.replaceTrack(newVideoTrack);
+    }
+  }, [callParty, isFrontCamera, getMedia]);
 
   // ── Socket event listeners ─────────────────────────────────────────────────
   useEffect(() => {
@@ -175,7 +200,7 @@ export function useWebRTC(socket: Socket | null, myUserId: string) {
       if (data.to !== myUserId) return;
       setCallState('connecting');
 
-      const stream = await getMedia(data.callType).catch(() => null);
+      const stream = await getMedia(data.callType, isFrontCamera).catch(() => null);
       if (!stream) { cleanup(); return; }
 
       const pc = createPc(data.from);
@@ -236,7 +261,7 @@ export function useWebRTC(socket: Socket | null, myUserId: string) {
       socket.off('call:reject',  onReject);
       socket.off('call:end',     onEnd);
     };
-  }, [socket, myUserId, callState, getMedia, createPc, cleanup]);
+  }, [socket, myUserId, callState, isFrontCamera, getMedia, createPc, cleanup]);
 
   // ── Duration formatter ────────────────────────────────────────────────────
   const fmtDuration = (secs: number) => {
@@ -250,6 +275,7 @@ export function useWebRTC(socket: Socket | null, myUserId: string) {
     callParty,
     isMuted,
     isVideoOff,
+    isFrontCamera,
     callDuration: fmtDuration(callDuration),
     localVideoRef,
     remoteVideoRef,
@@ -259,5 +285,6 @@ export function useWebRTC(socket: Socket | null, myUserId: string) {
     hangUp,
     toggleMute,
     toggleVideo,
+    flipCamera,
   };
 }

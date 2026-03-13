@@ -202,6 +202,10 @@ export const documents = {
 
 // ── Users ────────────────────────────────────────────────────────────────────
 export const users = {
+  search: (q: string) =>
+    apiFetch<{ data: { id: string; full_name: string; email: string; role: string }[] }>(
+      `/api/users/search?q=${encodeURIComponent(q)}`,
+    ),
   getAll: () => apiFetch<{ data: unknown[]; total: number }>('/api/users'),
   create: (data: { email: string; password: string; full_name: string; role: string }) =>
     apiFetch('/api/users', { method: 'POST', body: JSON.stringify(data) }),
@@ -242,7 +246,19 @@ export interface ChatMessage {
   created_at: string;
 }
 
+export interface RecentContact {
+  id: string;
+  full_name: string;
+  email: string;
+  role: string;
+  latest_msg: string;
+  latest_at: string;
+  unread_count: number;
+}
+
 export const messages = {
+  getRecentContacts: () =>
+    apiFetch<{ data: RecentContact[] }>('/api/messages/recent-contacts'),
   getConversation: (userId: string, before?: string) => {
     const qs = before ? `?before=${encodeURIComponent(before)}` : '';
     return apiFetch<{ data: ChatMessage[]; total: number }>(`/api/messages/${userId}${qs}`);

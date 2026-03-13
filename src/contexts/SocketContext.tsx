@@ -20,7 +20,6 @@ interface SocketContextValue {
   unreadCounts: Record<string, number>;
   totalUnread: number;
   clearUnread: (userId: string) => void;
-  // Expose a callback that MessagesPageClient can register to receive live messages
   onMessage: (cb: (msg: ChatMessage) => void) => () => void;
 }
 
@@ -28,17 +27,19 @@ const SocketContext = createContext<SocketContextValue | null>(null);
 
 export function SocketProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const socketRef               = useRef<Socket | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
+
+  // ── Use STATE (not ref) so consumers re-render when socket connects ────────
+  const [socket, setSocket]             = useState<Socket | null>(null);
+  const [isConnected, setIsConnected]   = useState(false);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const [unreadCounts,  setUnreadCounts]  = useState<Record<string, number>>({});
 
-  // Subscriber callbacks for new messages (MessagesPageClient registers here)
+  // Listener callbacks — MessagesPageClient registers here
   const msgListeners = useRef<Set<(msg: ChatMessage) => void>>(new Set());
 
   const onMessage = useCallback((cb: (msg: ChatMessage) => void) => {
     msgListeners.current.add(cb);
-    return () => msgListeners.current.delete(cb);
+    return () => { msgListeners.current.delete(cb); };
   }, []);
 
   // ── Load initial unread counts from REST ────────────────────────────────
@@ -47,35 +48,30 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     messagesApi.getUnreadCounts().then(counts => setUnreadCounts(counts)).catch(() => {});
   }, [user]);
 
-  // ── Socket connection ────────────────────────────────────────────────────
+  // ── Connect socket ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
     const token = getToken();
     if (!token) return;
 
-    const socket = io(SOCKET_URL, {
+    const sock = io(SOCKET_URL, {
       auth: { token },
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 10,
       reconnectionDelay: 2000,
     });
-    socketRef.current = socket;
 
-    socket.on('connect',    () => setIsConnected(true));
-    socket.on('disconnect', () => setIsConnected(false));
+    // Expose via state so all consumers get the real socket instance
+    setSocket(sock);
+    sock.on('connect',    () => setIsConnected(true));
+    sock.on('disconnect', () => setIsConnected(false));
 
-    // ── Presence ────────────────────────────────────────────────────────────
-    socket.on('users:online', (ids: string[]) => {
-      setOnlineUserIds(new Set(ids));
-    });
+    sock.on('users:online', (ids: string[]) => setOnlineUserIds(new Set(ids)));
 
-    // ── Incoming messages ────────────────────────────────────────────────────
-    socket.on('chat:message', (msg: ChatMessage) => {
-      // Notify all page-level listeners (e.g. MessagesPageClient)
+    sock.on('chat:message', (msg: ChatMessage) => {
+      // Notify page-level listeners
       msgListeners.current.forEach(cb => cb(msg));
-
-      // Increment unread counter for messages addressed to me that I haven't
-      // opened yet — the page will call clearUnread() when it reads them
+      // Increment unread for incoming messages not from self
       if (msg.to_user_id === user.id) {
         setUnreadCounts(prev => ({
           ...prev,
@@ -85,8 +81,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => {
-      socket.disconnect();
-      socketRef.current = null;
+      sock.disconnect();
+      setSocket(null);
       setIsConnected(false);
     };
   }, [user]);
@@ -103,7 +99,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <SocketContext.Provider value={{
-      socket: socketRef.current,
+      socket,
       isConnected,
       onlineUserIds,
       unreadCounts,
