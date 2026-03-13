@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import {
   ChevronRight,
@@ -262,9 +262,7 @@ export default function DocumentsPageClient() {
   const [upError, setUpError]       = useState('');
   const [upSuccess, setUpSuccess]   = useState(false);
 
-  // Camera/scan refs (two separate inputs)
-  const fileInputRef   = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
+  // No refs needed — file inputs are triggered via <label htmlFor>
 
   // ── Fetch ────────────────────────────────────────────────────────────────
   const fetchDocs = useCallback(async () => {
@@ -576,13 +574,12 @@ export default function DocumentsPageClient() {
               </div>
             ) : null}
 
-            {/* Two-button picker: Browse + Scan */}
+            {/* Two-button picker: Browse + Scan — uses <label htmlFor> for native mobile support */}
             {!upUploading && !upFileUrl && (
               <div className="flex gap-2">
                 {/* Browse files */}
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
+                <label
+                  htmlFor="doc-file-input"
                   className="flex-1 flex flex-col items-center justify-center gap-2 py-5 border-2 border-dashed border-gray-200 rounded-xl hover:border-green-400 hover:bg-green-50 transition-all cursor-pointer group"
                 >
                   <Upload className="w-6 h-6 text-gray-300 group-hover:text-green-500 transition-colors" />
@@ -590,12 +587,11 @@ export default function DocumentsPageClient() {
                     <p className="text-xs font-semibold text-gray-600 group-hover:text-green-700">Browse Files</p>
                     <p className="text-[10px] text-gray-400">PDF, JPG, PNG</p>
                   </div>
-                </button>
+                </label>
 
                 {/* Camera / Scan */}
-                <button
-                  type="button"
-                  onClick={() => cameraInputRef.current?.click()}
+                <label
+                  htmlFor="doc-camera-input"
                   className="flex-1 flex flex-col items-center justify-center gap-2 py-5 border-2 border-dashed border-gray-200 rounded-xl hover:border-teal-400 hover:bg-teal-50 transition-all cursor-pointer group"
                 >
                   <ScanLine className="w-6 h-6 text-gray-300 group-hover:text-teal-500 transition-colors" />
@@ -603,41 +599,38 @@ export default function DocumentsPageClient() {
                     <p className="text-xs font-semibold text-gray-600 group-hover:text-teal-700">Scan / Camera</p>
                     <p className="text-[10px] text-gray-400">Use device camera</p>
                   </div>
-                </button>
+                </label>
               </div>
             )}
 
-            {/* Replace button after upload */}
+            {/* Replace / Re-scan after upload */}
             {upFileUrl && !upUploading && (
               <div className="flex gap-2 mt-2">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex-1 text-center py-1.5 text-xs font-semibold text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                <label
+                  htmlFor="doc-file-input"
+                  className="flex-1 text-center py-1.5 text-xs font-semibold text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
                 >
                   Replace with file
-                </button>
-                <button
-                  type="button"
-                  onClick={() => cameraInputRef.current?.click()}
-                  className="flex-1 text-center py-1.5 text-xs font-semibold text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                </label>
+                <label
+                  htmlFor="doc-camera-input"
+                  className="flex-1 text-center py-1.5 text-xs font-semibold text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
                 >
                   Re-scan
-                </button>
+                </label>
               </div>
             )}
 
-            {/* Visually hidden but accessible — sr-only allows .click() on mobile */}
+            {/* File inputs — driven by <label htmlFor>, works natively on all mobile browsers */}
             <input
-              ref={fileInputRef}
+              id="doc-file-input"
               type="file"
               accept=".pdf,.jpg,.jpeg,.png,.webp"
               onChange={handleFilePick}
               className="sr-only"
             />
-            {/* Camera input: capture="environment" = back camera (ideal for scanning docs) */}
             <input
-              ref={cameraInputRef}
+              id="doc-camera-input"
               type="file"
               accept="image/*"
               capture="environment"

@@ -232,6 +232,27 @@ export const dataManagement = {
   restore: (id: string) => apiFetch(`/api/data-management/restore/${id}`, { method: 'POST' }),
 };
 
+// ── Messages ─────────────────────────────────────────────────────────────────
+export interface ChatMessage {
+  id: string;
+  from_user_id: string;
+  to_user_id: string;
+  body: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+export const messages = {
+  getConversation: (userId: string, before?: string) => {
+    const qs = before ? `?before=${encodeURIComponent(before)}` : '';
+    return apiFetch<{ data: ChatMessage[]; total: number }>(`/api/messages/${userId}${qs}`);
+  },
+  markRead: (userId: string) =>
+    apiFetch<{ ok: boolean }>(`/api/messages/${userId}/read`, { method: 'PATCH' }),
+  getUnreadCounts: () =>
+    apiFetch<Record<string, number>>('/api/messages/unread-counts'),
+};
+
 // ── Reports ─────────────────────────────────────────────────────────────────
 export const reports = {
   dailyFinancial: (date: string) => apiFetch(`/api/reports/daily-financial?date=${date}`),

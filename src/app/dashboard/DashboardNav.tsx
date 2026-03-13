@@ -8,10 +8,12 @@ import {
   Banknote, BookOpen, BarChart3, FileText,
   Settings, LogOut, Menu, X, Bell,
   ChevronRight, Search, AlertCircle, UserCog, ClipboardList, Database,
+  MessageSquare,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getRoleLabel, getInitials } from '@/lib/auth';
 import { dashboard } from '@/lib/api';
+import { useSocket } from '@/contexts/SocketContext';
 
 const NAV_MAIN = [
   { name: 'Dashboard', path: '/dashboard',  icon: LayoutDashboard },
@@ -27,12 +29,14 @@ const NAV_ADMIN = [
   { name: 'Data Management', path: '/data-management',  icon: Database },
 ];
 const NAV_SUPPORT = [
+  { name: 'Messages',  path: '/messages',  icon: MessageSquare },
   { name: 'Documents', path: '/documents', icon: FileText },
   { name: 'Settings',  path: '/settings',  icon: Settings },
 ];
 
 export default function DashboardNav() {
   const { user, logout } = useAuth();
+  const { totalUnread }  = useSocket();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pending, setPending] = useState(0);
@@ -58,8 +62,9 @@ export default function DashboardNav() {
 
   function NavItem({ name, path, icon: Icon }: { name: string; path: string; icon: React.ElementType }) {
     const active = isActive(path);
-    const loanBadge = name === 'Loans'    && pending > 0 ? pending : null;
-    const payBadge  = name === 'Payments' && overdue  > 0 ? overdue  : null;
+    const loanBadge = name === 'Loans'     && pending     > 0 ? pending     : null;
+    const payBadge  = name === 'Payments'  && overdue      > 0 ? overdue      : null;
+    const msgBadge  = name === 'Messages'  && totalUnread  > 0 ? totalUnread  : null;
     return (
       <li>
         <Link
@@ -81,6 +86,11 @@ export default function DashboardNav() {
           {payBadge != null && (
             <span className={`text-[10px] font-bold h-5 min-w-5 px-1.5 rounded-full flex items-center justify-center ${active ? 'bg-white/25 text-white' : 'bg-red-100 text-red-600'}`}>
               {payBadge}
+            </span>
+          )}
+          {msgBadge != null && (
+            <span className={`text-[10px] font-bold h-5 min-w-5 px-1.5 rounded-full flex items-center justify-center ${active ? 'bg-white/25 text-white' : 'bg-green-100 text-green-700'}`}>
+              {msgBadge > 99 ? '99+' : msgBadge}
             </span>
           )}
         </Link>
@@ -226,7 +236,7 @@ export default function DashboardNav() {
         {/* Bell */}
         <button className="relative p-2 rounded-xl text-slate-500 hover:bg-slate-100 transition-colors">
           <Bell className="w-5 h-5" />
-          {(pending > 0 || overdue > 0) && (
+          {(pending > 0 || overdue > 0 || totalUnread > 0) && (
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white" />
           )}
         </button>

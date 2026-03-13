@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Search, X, CheckCircle, Loader2, AlertCircle, RefreshCw, User, Eye, Upload, Camera, ScanLine, Pencil, Trash2 } from 'lucide-react';
 import { members, uploadFile, resolveFileUrl } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -39,13 +39,15 @@ const ic = 'w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:o
 const lc = 'block text-xs font-semibold text-gray-700 mb-1.5';
 
 // Dual-button upload: Browse + Scan (camera)
-function FileUploadBtn({ label, accept, uploaded, uploading, onChange, captureMode }: {
+// Uses <label htmlFor> — the ONLY approach that reliably opens file/camera on iOS Safari
+function FileUploadBtn({ label, accept, uploaded, uploading, onChange, captureMode, idBase }: {
   label: string; accept: string; uploaded: boolean; uploading: boolean;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   captureMode?: 'environment' | 'user';
+  idBase: string;
 }) {
-  const fileRef   = useRef<HTMLInputElement>(null);
-  const cameraRef = useRef<HTMLInputElement>(null);
+  const fileId   = `${idBase}-file`;
+  const cameraId = `${idBase}-cam`;
   return (
     <div>
       <label className={lc}>{label}</label>
@@ -58,27 +60,27 @@ function FileUploadBtn({ label, accept, uploaded, uploading, onChange, captureMo
         <div className="flex items-center gap-2 px-3 py-2.5 border-2 border-green-400 rounded-xl bg-green-50">
           <CheckCircle className="w-4 h-4 text-green-600" />
           <span className="text-xs font-medium text-green-700 flex-1">Uploaded ✓</span>
-          <button type="button" onClick={() => fileRef.current?.click()} className="text-[10px] text-green-600 underline">Replace</button>
+          <label htmlFor={fileId} className="text-[10px] text-green-600 underline cursor-pointer">Replace</label>
         </div>
       ) : (
         <div className="flex gap-2">
-          <button type="button" onClick={() => fileRef.current?.click()}
+          <label htmlFor={fileId}
             className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 border-2 border-dashed border-gray-200 rounded-xl hover:border-green-300 hover:bg-green-50 transition-all cursor-pointer group">
             <Upload className="w-4 h-4 text-gray-400 group-hover:text-green-500" />
             <span className="text-xs font-medium text-gray-500 group-hover:text-green-700">Browse</span>
-          </button>
+          </label>
           {captureMode && (
-            <button type="button" onClick={() => cameraRef.current?.click()}
+            <label htmlFor={cameraId}
               className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 border-2 border-dashed border-gray-200 rounded-xl hover:border-teal-300 hover:bg-teal-50 transition-all cursor-pointer group">
               <ScanLine className="w-4 h-4 text-gray-400 group-hover:text-teal-500" />
               <span className="text-xs font-medium text-gray-500 group-hover:text-teal-700">Scan</span>
-            </button>
+            </label>
           )}
         </div>
       )}
-      <input ref={fileRef} type="file" accept={accept} onChange={onChange} className="sr-only" />
+      <input id={fileId} type="file" accept={accept} onChange={onChange} className="sr-only" />
       {captureMode && (
-        <input ref={cameraRef} type="file" accept="image/*" capture={captureMode} onChange={onChange} className="sr-only" />
+        <input id={cameraId} type="file" accept="image/*" capture={captureMode} onChange={onChange} className="sr-only" />
       )}
     </div>
   );
@@ -102,8 +104,6 @@ export default function MembersPageClient() {
   const [f, setF] = useState<F>(INIT);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadingDoc,   setUploadingDoc]   = useState(false);
-  const photoFileRef   = useRef<HTMLInputElement>(null);
-  const photoCameraRef = useRef<HTMLInputElement>(null);
 
   // Edit state
   const [showEdit, setShowEdit] = useState(false);
@@ -321,26 +321,26 @@ export default function MembersPageClient() {
                     <div className="flex items-center gap-3 px-3 py-2.5 border-2 border-green-400 rounded-xl bg-green-50">
                       <img src={resolveFileUrl(f.photo_url)} alt="" className="w-9 h-9 rounded-full object-cover shrink-0 border-2 border-green-300" />
                       <span className="text-xs font-medium text-green-700 flex-1">Photo uploaded ✓</span>
-                      <button type="button" onClick={() => photoFileRef.current?.click()} className="text-[10px] text-green-600 underline">Replace</button>
+                      <label htmlFor="member-photo-file" className="text-[10px] text-green-600 underline cursor-pointer">Replace</label>
                     </div>
                   ) : (
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => photoFileRef.current?.click()}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 border-2 border-dashed border-gray-200 rounded-xl hover:border-green-300 hover:bg-green-50 transition-all group">
+                      <label htmlFor="member-photo-file"
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 border-2 border-dashed border-gray-200 rounded-xl hover:border-green-300 hover:bg-green-50 transition-all cursor-pointer group">
                         <Upload className="w-4 h-4 text-gray-400 group-hover:text-green-500" />
                         <span className="text-xs font-medium text-gray-500 group-hover:text-green-700">Browse</span>
-                      </button>
-                      <button type="button" onClick={() => photoCameraRef.current?.click()}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 border-2 border-dashed border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all group">
+                      </label>
+                      <label htmlFor="member-photo-camera"
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 border-2 border-dashed border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all cursor-pointer group">
                         <Camera className="w-4 h-4 text-gray-400 group-hover:text-blue-500" />
                         <span className="text-xs font-medium text-gray-500 group-hover:text-blue-700">Take Photo</span>
-                      </button>
+                      </label>
                     </div>
                   )}
                   {/* Browse — no capture (file picker) */}
-                  <input ref={photoFileRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="sr-only" />
+                  <input id="member-photo-file" type="file" accept="image/*" onChange={handlePhotoUpload} className="sr-only" />
                   {/* Camera — capture="user" = front camera on mobile */}
-                  <input ref={photoCameraRef} type="file" accept="image/*" capture="user" onChange={handlePhotoUpload} className="sr-only" />
+                  <input id="member-photo-camera" type="file" accept="image/*" capture="user" onChange={handlePhotoUpload} className="sr-only" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2"><label className={lc}>Full Name *</label><input value={f.full_name} onChange={upd('full_name')} placeholder="First Last" className={ic} /></div>
@@ -387,6 +387,7 @@ export default function MembersPageClient() {
                   uploading={uploadingDoc}
                   onChange={handleDocUpload}
                   captureMode="environment"
+                  idBase="member-doc"
                 />
               </div>}
             </div>
