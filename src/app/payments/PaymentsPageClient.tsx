@@ -59,44 +59,28 @@ function ReceiptModal({ receipt, onClose }: { receipt: ReceiptData; onClose: () 
           .receipt-print-area * { visibility: visible !important; }
           .receipt-print-area {
             position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
+            top: 0 !important; left: 0 !important;
             width: 100% !important;
-            padding: 12px !important;
-            background: white !important;
+            padding: 10px !important;
+            background: #fff !important;
+            font-size: 14px !important;
+            line-height: 1.6 !important;
+            font-weight: 700 !important;
+            color: #000 !important;
           }
-          /* Force all text to black — thermal printers don't print colour */
           .receipt-print-area * {
             color: #000 !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-          /* Boost font size so nothing is tiny on paper */
-          .receipt-print-area {
-            font-size: 13px !important;
-            line-height: 1.5 !important;
-            font-weight: 600 !important;
-          }
-          .receipt-print-area .rp-label {
             font-weight: 700 !important;
+            background: transparent !important;
+            border-color: #000 !important;
           }
-          .receipt-print-area .rp-value {
-            font-weight: 800 !important;
-          }
-          .receipt-print-area .rp-large {
-            font-size: 16px !important;
+          .receipt-print-area .rp-lg {
+            font-size: 17px !important;
             font-weight: 900 !important;
           }
-          .receipt-print-area .rp-section-title {
-            font-size: 11px !important;
-            font-weight: 700 !important;
-          }
-          .receipt-print-area .rp-footer {
-            font-size: 11px !important;
-            font-weight: 600 !important;
-          }
-          .receipt-print-area .rp-divider {
-            border-top: 1px dashed #000 !important;
+          .receipt-print-area .rp-hd {
+            font-size: 15px !important;
+            font-weight: 900 !important;
           }
         }
       `}</style>
@@ -115,102 +99,103 @@ function ReceiptModal({ receipt, onClose }: { receipt: ReceiptData; onClose: () 
 
           {/* Scrollable receipt area */}
           <div className="overflow-y-auto max-h-[70vh] px-5 py-4">
-            {/* POS receipt styled div */}
-            <div className="receipt-print-area font-mono text-xs bg-white" style={{ width: '100%' }}>
+            {/* POS receipt styled div — ALL black, ALL bold, thermal-safe */}
+            <div className="receipt-print-area font-mono bg-white text-black" style={{ width: '100%', fontSize: 12 }}>
+
               {/* Header */}
-              <div className="text-center mb-3">
-                <div className="text-sm font-extrabold tracking-tight">KADAKA ESTABLISHMENT CO.</div>
-                <div className="text-[11px] text-gray-700 font-semibold">Lending Management System</div>
-                <div className="text-[11px] text-gray-600">www.kadaka.ug | Tel: +256-XXX-XXX</div>
+              <div className="text-center mb-2">
+                <div className="rp-hd text-sm font-black text-black tracking-tight">KADAKA ESTABLISHMENT CO.</div>
+                <div className="text-xs font-bold text-black">Lending Management System</div>
+                <div className="text-xs font-bold text-black">www.kadaka.ug | Tel: +256-XXX-XXX</div>
               </div>
 
-              <div className="rp-divider border-t border-dashed border-gray-700 my-2" />
+              <div className="border-t-2 border-dashed border-black my-2" />
 
               {/* Receipt meta */}
-              <div className="space-y-0.5 text-[11px]">
+              <div className="space-y-1 text-xs">
                 <div className="flex justify-between">
-                  <span className="rp-label font-bold text-gray-800">Receipt #</span>
-                  <span className="rp-value font-extrabold text-gray-900">{receipt.receipt_number}</span>
+                  <span className="font-bold text-black">Receipt #</span>
+                  <span className="font-black text-black">{receipt.receipt_number}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="rp-label font-bold text-gray-800">Date</span>
-                  <span className="rp-value font-extrabold text-gray-900">{fmt(receipt.payment_date)}</span>
+                  <span className="font-bold text-black">Date</span>
+                  <span className="font-black text-black">{fmt(receipt.payment_date)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="rp-label font-bold text-gray-800">Time</span>
-                  <span className="rp-value font-extrabold text-gray-900">{fmtTime(receipt.created_at)}</span>
+                  <span className="font-bold text-black">Time</span>
+                  <span className="font-black text-black">{fmtTime(receipt.created_at)}</span>
                 </div>
               </div>
 
-              <div className="rp-divider border-t border-dashed border-gray-700 my-2" />
+              <div className="border-t-2 border-dashed border-black my-2" />
 
               {/* Borrower info */}
-              <div className="space-y-0.5 text-[11px]">
+              <div className="space-y-1 text-xs">
                 <div className="flex justify-between">
-                  <span className="rp-label font-bold text-gray-800">Member</span>
-                  <span className="rp-value font-extrabold text-gray-900">{receipt.member_name}</span>
+                  <span className="font-bold text-black">Member</span>
+                  <span className="font-black text-black">{receipt.member_name}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="rp-label font-bold text-gray-800">Loan #</span>
-                  <span className="rp-value font-extrabold text-gray-900">{receipt.loan_number}</span>
+                  <span className="font-bold text-black">Loan #</span>
+                  <span className="font-black text-black">{receipt.loan_number}</span>
                 </div>
                 {receipt.group_name && (
                   <div className="flex justify-between">
-                    <span className="rp-label font-bold text-gray-800">Group</span>
-                    <span className="rp-value font-extrabold text-gray-900">{receipt.group_name}</span>
+                    <span className="font-bold text-black">Group</span>
+                    <span className="font-black text-black">{receipt.group_name}</span>
                   </div>
                 )}
               </div>
 
-              <div className="rp-divider border-t border-dashed border-gray-700 my-2" />
+              <div className="border-t-2 border-dashed border-black my-2" />
 
               {/* Payment breakdown */}
-              <div className="space-y-0.5 text-[11px]">
-                <div className="rp-large flex justify-between font-extrabold text-[13px] text-green-700">
+              <div className="space-y-1 text-xs">
+                <div className="rp-lg flex justify-between text-sm font-black text-black">
                   <span>AMOUNT PAID</span>
                   <span>{ugx(receipt.amount_paid)}</span>
                 </div>
-                <div className="flex justify-between font-semibold text-gray-800">
+                <div className="flex justify-between font-bold text-black">
                   <span>Interest portion</span>
                   <span>{ugx(receipt.interest_portion)}</span>
                 </div>
-                <div className="flex justify-between font-semibold text-gray-800">
+                <div className="flex justify-between font-bold text-black">
                   <span>Principal portion</span>
                   <span>{ugx(receipt.principal_portion)}</span>
                 </div>
               </div>
 
-              <div className="rp-divider border-t border-dashed border-gray-700 my-2" />
+              <div className="border-t-2 border-dashed border-black my-2" />
 
               {/* Remaining balance */}
-              <div className="space-y-0.5 text-[11px]">
-                <div className="rp-section-title text-[10px] text-gray-700 font-bold uppercase tracking-wide mb-0.5">Remaining Balance</div>
-                <div className="flex justify-between font-extrabold text-gray-900">
+              <div className="space-y-1 text-xs">
+                <div className="font-black text-black uppercase tracking-wide text-xs mb-0.5">-- REMAINING BALANCE --</div>
+                <div className="flex justify-between text-sm font-black text-black">
                   <span>Total</span>
                   <span>{ugx(receipt.balance_total_after)}</span>
                 </div>
-                <div className="flex justify-between font-semibold text-gray-800">
+                <div className="flex justify-between font-bold text-black">
                   <span>Interest</span>
                   <span>{ugx(receipt.balance_interest_after)}</span>
                 </div>
-                <div className="flex justify-between font-semibold text-gray-800">
+                <div className="flex justify-between font-bold text-black">
                   <span>Principal</span>
                   <span>{ugx(receipt.balance_principal_after)}</span>
                 </div>
               </div>
 
-              <div className="rp-divider border-t border-dashed border-gray-700 my-2" />
+              <div className="border-t-2 border-dashed border-black my-2" />
 
               {/* Method */}
-              <div className="space-y-0.5 text-[11px]">
+              <div className="space-y-1 text-xs">
                 <div className="flex justify-between">
-                  <span className="rp-label font-bold text-gray-800">Method</span>
-                  <span className="rp-value font-extrabold text-gray-900 capitalize">{methodLabel}</span>
+                  <span className="font-bold text-black">Method</span>
+                  <span className="font-black text-black capitalize">{methodLabel}</span>
                 </div>
                 {receipt.transaction_reference && (
                   <div className="flex justify-between">
-                    <span className="rp-label font-bold text-gray-800">Reference</span>
-                    <span className="rp-value font-extrabold text-gray-900">{receipt.transaction_reference}</span>
+                    <span className="font-bold text-black">Reference</span>
+                    <span className="font-black text-black">{receipt.transaction_reference}</span>
                   </div>
                 )}
               </div>
@@ -218,23 +203,24 @@ function ReceiptModal({ receipt, onClose }: { receipt: ReceiptData; onClose: () 
               {/* Loan cleared banner */}
               {receipt.loan_cleared && (
                 <>
-                  <div className="rp-divider border-t border-dashed border-gray-700 my-2" />
-                  <div className="text-center py-1 bg-green-50 rounded-lg">
-                    <div className="text-sm font-extrabold text-green-700">*** LOAN FULLY CLEARED! ***</div>
-                    <div className="text-[11px] font-semibold text-gray-800">Congratulations on completing your loan</div>
+                  <div className="border-t-2 border-dashed border-black my-2" />
+                  <div className="text-center py-1">
+                    <div className="text-sm font-black text-black">*** LOAN FULLY CLEARED! ***</div>
+                    <div className="text-xs font-bold text-black">Congratulations on completing your loan</div>
                   </div>
                 </>
               )}
 
-              <div className="rp-divider border-t border-dashed border-gray-700 my-2" />
+              <div className="border-t-2 border-dashed border-black my-2" />
 
               {/* Footer */}
-              <div className="rp-footer text-center text-[11px] text-gray-700 space-y-0.5">
-                <div className="font-bold text-gray-900">Thank you for your payment!</div>
-                <div className="font-semibold">Please keep this receipt for your records.</div>
-                <div className="mt-1 font-semibold">Kadaka Establishment Co. (U) LTD</div>
-                <div className="font-semibold">© {new Date().getFullYear()} All rights reserved</div>
+              <div className="text-center text-xs font-bold text-black space-y-0.5">
+                <div className="font-black text-black">Thank you for your payment!</div>
+                <div>Please keep this receipt for your records.</div>
+                <div className="mt-1">Kadaka Establishment Co. (U) LTD</div>
+                <div>© {new Date().getFullYear()} All rights reserved</div>
               </div>
+
             </div>
           </div>
 
