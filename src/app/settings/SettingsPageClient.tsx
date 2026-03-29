@@ -4,9 +4,10 @@ import React, { useState, useEffect } from 'react';
 import {
   Settings, User, Shield, Monitor, Eye, EyeOff,
   CheckCircle, AlertTriangle, Lock, Globe, Bell,
-  ChevronRight, LogOut, Info,
+  ChevronRight, LogOut, Info, Building2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOrg } from '@/contexts/OrgContext';
 import { getRoleLabel, getInitials } from '@/lib/auth';
 import { fmtDateTime, TIMEZONE } from '@/lib/dateUtils';
 
@@ -42,7 +43,7 @@ function savePrefs(p: Prefs) {
 }
 
 // ── Tab type ─────────────────────────────────────────────────────────────────
-type Tab = 'profile' | 'security' | 'preferences';
+type Tab = 'profile' | 'security' | 'preferences' | 'organisation';
 
 // ── Toggle switch ─────────────────────────────────────────────────────────────
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
@@ -106,6 +107,7 @@ function Card({ title, icon: Icon, children }: { title: string; icon: React.Elem
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function SettingsPageClient() {
   const { user, changePassword, logout } = useAuth();
+  const { orgDetails, saveOrgDetails } = useOrg();
   const [tab, setTab] = useState<Tab>('profile');
 
   // ── Change password state ─────────────────────────────────────────────────
@@ -124,6 +126,30 @@ export default function SettingsPageClient() {
   const [prefSaved,  setPrefSaved]  = useState(false);
 
   useEffect(() => { setPrefs(loadPrefs()); }, []);
+
+  // ── Organisation state ────────────────────────────────────────────────────
+  const [orgForm, setOrgForm] = useState({
+    org_name: '',
+    org_tagline: '',
+    org_reg_number: '',
+    org_address: '',
+    org_phone: '',
+    org_email: '',
+    org_website: '',
+  });
+  const [orgSaved, setOrgSaved] = useState(false);
+
+  useEffect(() => {
+    setOrgForm({
+      org_name:       orgDetails.org_name,
+      org_tagline:    orgDetails.org_tagline,
+      org_reg_number: orgDetails.org_reg_number,
+      org_address:    orgDetails.org_address,
+      org_phone:      orgDetails.org_phone,
+      org_email:      orgDetails.org_email,
+      org_website:    orgDetails.org_website,
+    });
+  }, [orgDetails]);
 
   const role  = user?.role ?? '';
   const name  = user?.full_name ?? '—';
@@ -159,10 +185,18 @@ export default function SettingsPageClient() {
 
   const ic = 'w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-400 bg-gray-50 focus:bg-white transition-all';
 
-  const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
-    { key: 'profile',     label: 'My Profile',  icon: User },
-    { key: 'security',    label: 'Security',     icon: Shield },
-    { key: 'preferences', label: 'Preferences',  icon: Monitor },
+  const handleOrgSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveOrgDetails(orgForm);
+    setOrgSaved(true);
+    setTimeout(() => setOrgSaved(false), 2500);
+  };
+
+  const TABS: { key: Tab; label: string; icon: React.ElementType; managerOnly?: boolean }[] = [
+    { key: 'profile',      label: 'My Profile',    icon: User },
+    { key: 'security',     label: 'Security',      icon: Shield },
+    { key: 'preferences',  label: 'Preferences',   icon: Monitor },
+    { key: 'organisation', label: 'Organisation',  icon: Building2, managerOnly: true },
   ];
 
   return (
@@ -180,8 +214,8 @@ export default function SettingsPageClient() {
       </div>
 
       {/* ── Tabs ─────────────────────────────────────────────────────────── */}
-      <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-sm w-fit">
-        {TABS.map(({ key, label, icon: Icon }) => (
+      <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-sm w-fit flex-wrap">
+        {TABS.filter(t => !t.managerOnly || role === 'branch_manager').map(({ key, label, icon: Icon }) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -247,7 +281,7 @@ export default function SettingsPageClient() {
                     {TIMEZONE} (UTC+3)
                   </span>
                 </Row>
-                <Row label="System Version" desc="Kadaka Lending Management System">
+                <Row label="System Version" desc="Quewola Lending Management Platform">
                   <span className="px-2.5 py-1 bg-gray-100 border border-gray-200 rounded-lg text-xs font-semibold text-gray-600">
                     v2.0.0
                   </span>
@@ -387,6 +421,110 @@ export default function SettingsPageClient() {
                 </div>
               ))}
             </div>
+          </Card>
+        </div>
+      )}
+
+      {/* ── ORGANISATION TAB ─────────────────────────────────────────────── */}
+      {tab === 'organisation' && role === 'branch_manager' && (
+        <div className="max-w-2xl space-y-5">
+          {orgSaved && (
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700">
+              <CheckCircle className="w-4 h-4 shrink-0" />
+              Organisation details saved successfully.
+            </div>
+          )}
+          <Card title="Organisation Details" icon={Building2}>
+            <form onSubmit={handleOrgSave} className="space-y-4">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Organisation Name</label>
+                  <input
+                    type="text"
+                    value={orgForm.org_name}
+                    onChange={e => setOrgForm(f => ({ ...f, org_name: e.target.value }))}
+                    placeholder="e.g. Kadaka Establishment Co."
+                    className={ic}
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Tagline / Description</label>
+                  <input
+                    type="text"
+                    value={orgForm.org_tagline}
+                    onChange={e => setOrgForm(f => ({ ...f, org_tagline: e.target.value }))}
+                    placeholder="e.g. Lending Management System"
+                    className={ic}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Registration Number</label>
+                  <input
+                    type="text"
+                    value={orgForm.org_reg_number}
+                    onChange={e => setOrgForm(f => ({ ...f, org_reg_number: e.target.value }))}
+                    placeholder="e.g. 80020001234567"
+                    className={ic}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Phone Number</label>
+                  <input
+                    type="tel"
+                    value={orgForm.org_phone}
+                    onChange={e => setOrgForm(f => ({ ...f, org_phone: e.target.value }))}
+                    placeholder="e.g. +256 700 000 000"
+                    className={ic}
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Address</label>
+                  <input
+                    type="text"
+                    value={orgForm.org_address}
+                    onChange={e => setOrgForm(f => ({ ...f, org_address: e.target.value }))}
+                    placeholder="e.g. Plot 12, Kampala Road, Kampala"
+                    className={ic}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Email</label>
+                  <input
+                    type="email"
+                    value={orgForm.org_email}
+                    onChange={e => setOrgForm(f => ({ ...f, org_email: e.target.value }))}
+                    placeholder="e.g. info@myorg.ug"
+                    className={ic}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Website</label>
+                  <input
+                    type="text"
+                    value={orgForm.org_website}
+                    onChange={e => setOrgForm(f => ({ ...f, org_website: e.target.value }))}
+                    placeholder="e.g. www.myorg.ug"
+                    className={ic}
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-semibold transition-all shadow-sm"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  Save Organisation Details
+                </button>
+              </div>
+            </form>
           </Card>
         </div>
       )}

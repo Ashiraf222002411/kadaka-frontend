@@ -185,7 +185,7 @@ export default function RegisterPage() {
               <span className="text-white font-bold text-2xl">K</span>
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Kadaka</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Quewola</h1>
               <p className="text-sm text-green-600">Establishment Co.</p>
             </div>
           </Link>
@@ -193,7 +193,7 @@ export default function RegisterPage() {
           {/* Header */}
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-1">Create your account</h2>
-            <p className="text-sm text-gray-500">Join hundreds of microfinance institutions already using Kadaka</p>
+            <p className="text-sm text-gray-500">Join hundreds of microfinance institutions already using Quewola</p>
           </div>
 
           {/* Progress Indicator */}
@@ -686,7 +686,7 @@ export default function RegisterPage() {
             <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
               <div className="text-center mb-4">
                 <div className="text-5xl font-bold">500+</div>
-                <div className="text-green-200">Organizations trust Kadaka</div>
+                <div className="text-green-200">Organizations trust Quewola</div>
               </div>
             </div>
           </div>

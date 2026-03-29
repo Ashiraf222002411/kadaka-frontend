@@ -58,7 +58,7 @@ export default function HomePage() {
             <div className="w-8 h-8 rounded-xl bg-green-600 flex items-center justify-center shadow-sm">
               <span className="text-white font-bold text-sm">K</span>
             </div>
-            <span className="font-bold text-slate-900 text-sm">Kadaka</span>
+            <span className="font-bold text-slate-900 text-sm">Quewola</span>
           </Link>
 
           <nav className="hidden md:flex items-center gap-1">
@@ -106,7 +106,7 @@ export default function HomePage() {
           </h1>
 
           <p className="text-lg sm:text-xl text-slate-500 max-w-2xl mx-auto mb-10 leading-relaxed">
-            Kadaka is the complete digital lending platform — from member onboarding to daily collections and real-time financial reporting.
+            Quewola is the complete digital lending platform — from member onboarding to daily collections and real-time financial reporting.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-16">
@@ -146,9 +146,9 @@ export default function HomePage() {
               <div className="w-44 border-r border-slate-100 bg-white p-3 hidden sm:flex flex-col gap-1">
                 <div className="flex items-center gap-2 mb-3 px-2">
                   <div className="w-5 h-5 rounded-md bg-green-600 flex items-center justify-center shrink-0">
-                    <span className="text-white text-[8px] font-bold">K</span>
+                    <span className="text-white text-[8px] font-bold">Q</span>
                   </div>
-                  <span className="text-xs font-bold text-slate-800">Kadaka</span>
+                  <span className="text-xs font-bold text-slate-800">Quewola</span>
                 </div>
                 {[['Dashboard', true], ['Members', false], ['Loans', false], ['Payments', false], ['Cashbook', false]].map(([label, active]) => (
                   <div key={label as string} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${active ? 'bg-green-600' : ''}`}>
@@ -261,7 +261,7 @@ export default function HomePage() {
             Trusted by MFIs in Uganda
           </div>
           <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight mb-4">Ready to modernise your lending?</h2>
-          <p className="text-slate-400 text-lg mb-10">Join institutions already using Kadaka to manage their portfolios digitally.</p>
+          <p className="text-slate-400 text-lg mb-10">Join institutions already using Quewola to manage their portfolios digitally.</p>
           <Link href="/login" className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-8 py-3.5 rounded-xl text-sm font-bold transition-colors shadow-lg shadow-green-900/40">
             Get started free <ArrowRight className="w-4 h-4" />
           </Link>
@@ -275,12 +275,12 @@ export default function HomePage() {
             <div className="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center">
               <span className="text-white font-bold text-xs">K</span>
             </div>
-            <span className="text-sm font-bold text-white">Kadaka</span>
-            <span className="text-slate-600 text-xs ml-2">© 2026 Kadaka Establishment Co. (U) LTD</span>
+            <span className="text-sm font-bold text-white">Quewola</span>
+            <span className="text-slate-600 text-xs ml-2">© 2026 Quewola Platform</span>
           </div>
           <div className="flex items-center gap-6">
             <Link href="/login" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Sign in</Link>
-            <a href="mailto:info@kadaka.ug" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">info@kadaka.ug</a>
+            <a href="mailto:info@quewola.com" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">info@quewola.com</a>
           </div>
         </div>
       </footer>

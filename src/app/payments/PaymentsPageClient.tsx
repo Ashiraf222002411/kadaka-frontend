@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, X, CheckCircle, BookOpen, Loader2, AlertCircle, RefreshCw, Smartphone, Banknote, Building2, Printer, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Search, X, CheckCircle, BookOpen, Loader2, AlertCircle, RefreshCw, Smartphone, Banknote, Building2, Printer, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { payments, loans } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOrg } from '@/contexts/OrgContext';
 import { todayUG } from '@/lib/dateUtils';
 
 type Payment = {
@@ -35,6 +36,7 @@ const METHOD_MAP: Record<string, { label: string; color: string; Icon: React.FC<
 
 // ── POS Receipt Modal (defined outside to prevent focus loss) ─────────────────
 function ReceiptModal({ receipt, onClose }: { receipt: ReceiptData; onClose: () => void }) {
+  const { orgDetails } = useOrg();
   const printReceipt = () => window.print();
 
   const TZ = 'Africa/Kampala';
@@ -61,26 +63,8 @@ function ReceiptModal({ receipt, onClose }: { receipt: ReceiptData; onClose: () 
             position: fixed !important;
             top: 0 !important; left: 0 !important;
             width: 100% !important;
-            padding: 10px !important;
+            padding: 8px !important;
             background: #fff !important;
-            font-size: 14px !important;
-            line-height: 1.6 !important;
-            font-weight: 700 !important;
-            color: #000 !important;
-          }
-          .receipt-print-area * {
-            color: #000 !important;
-            font-weight: 700 !important;
-            background: transparent !important;
-            border-color: #000 !important;
-          }
-          .receipt-print-area .rp-lg {
-            font-size: 17px !important;
-            font-weight: 900 !important;
-          }
-          .receipt-print-area .rp-hd {
-            font-size: 15px !important;
-            font-weight: 900 !important;
           }
         }
       `}</style>
@@ -99,125 +83,105 @@ function ReceiptModal({ receipt, onClose }: { receipt: ReceiptData; onClose: () 
 
           {/* Scrollable receipt area */}
           <div className="overflow-y-auto max-h-[70vh] px-5 py-4">
-            {/* POS receipt styled div — ALL black, ALL bold, thermal-safe */}
-            <div className="receipt-print-area font-mono bg-white text-black" style={{ width: '100%', fontSize: 12 }}>
+            {/* Receipt — 100% inline styles, thermal-printer safe */}
+            <div className="receipt-print-area" style={{ fontFamily: 'monospace', background: '#fff', color: '#000', width: '100%', fontSize: 13, lineHeight: 1.7 }}>
 
               {/* Header */}
-              <div className="text-center mb-2">
-                <div className="rp-hd text-sm font-black text-black tracking-tight">KADAKA ESTABLISHMENT CO.</div>
-                <div className="text-xs font-bold text-black">Lending Management System</div>
-                <div className="text-xs font-bold text-black">www.kadaka.ug | Tel: +256-XXX-XXX</div>
+              <div style={{ textAlign: 'center', marginBottom: 8 }}>
+                <div style={{ fontSize: 15, fontWeight: 900, color: '#000', letterSpacing: 0 }}>{orgDetails.org_name.toUpperCase()}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#000' }}>{orgDetails.org_tagline || 'Lending Management System'}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#000' }}>
+                  {orgDetails.org_website && orgDetails.org_phone
+                    ? `${orgDetails.org_website} | Tel: ${orgDetails.org_phone}`
+                    : orgDetails.org_phone
+                    ? `Tel: ${orgDetails.org_phone}`
+                    : orgDetails.org_website
+                    ? orgDetails.org_website
+                    : 'Tel: +256-XXX-XXX'}
+                </div>
               </div>
 
-              <div className="border-t-2 border-dashed border-black my-2" />
+              <div style={{ borderTop: '2px dashed #000', margin: '6px 0' }} />
 
               {/* Receipt meta */}
-              <div className="space-y-1 text-xs">
-                <div className="flex justify-between">
-                  <span className="font-bold text-black">Receipt #</span>
-                  <span className="font-black text-black">{receipt.receipt_number}</span>
+              {[
+                ['Receipt #', receipt.receipt_number],
+                ['Date',      fmt(receipt.payment_date)],
+                ['Time',      fmtTime(receipt.created_at)],
+              ].map(([label, value]) => (
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700, color: '#000', marginBottom: 2 }}>
+                  <span>{label}</span><span style={{ fontWeight: 900 }}>{value}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="font-bold text-black">Date</span>
-                  <span className="font-black text-black">{fmt(receipt.payment_date)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-bold text-black">Time</span>
-                  <span className="font-black text-black">{fmtTime(receipt.created_at)}</span>
-                </div>
-              </div>
+              ))}
 
-              <div className="border-t-2 border-dashed border-black my-2" />
+              <div style={{ borderTop: '2px dashed #000', margin: '6px 0' }} />
 
               {/* Borrower info */}
-              <div className="space-y-1 text-xs">
-                <div className="flex justify-between">
-                  <span className="font-bold text-black">Member</span>
-                  <span className="font-black text-black">{receipt.member_name}</span>
+              {[
+                ['Member', receipt.member_name],
+                ['Loan #',  receipt.loan_number],
+                ...(receipt.group_name ? [['Group', receipt.group_name]] : []),
+              ].map(([label, value]) => (
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700, color: '#000', marginBottom: 2 }}>
+                  <span>{label}</span><span style={{ fontWeight: 900 }}>{value}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="font-bold text-black">Loan #</span>
-                  <span className="font-black text-black">{receipt.loan_number}</span>
-                </div>
-                {receipt.group_name && (
-                  <div className="flex justify-between">
-                    <span className="font-bold text-black">Group</span>
-                    <span className="font-black text-black">{receipt.group_name}</span>
-                  </div>
-                )}
+              ))}
+
+              <div style={{ borderTop: '2px dashed #000', margin: '6px 0' }} />
+
+              {/* Amount paid */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17, fontWeight: 900, color: '#000', marginBottom: 3 }}>
+                <span>AMOUNT PAID</span><span>{ugx(receipt.amount_paid)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700, color: '#000', marginBottom: 2 }}>
+                <span>Interest portion</span><span>{ugx(receipt.interest_portion)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700, color: '#000', marginBottom: 2 }}>
+                <span>Principal portion</span><span>{ugx(receipt.principal_portion)}</span>
               </div>
 
-              <div className="border-t-2 border-dashed border-black my-2" />
-
-              {/* Payment breakdown */}
-              <div className="space-y-1 text-xs">
-                <div className="rp-lg flex justify-between text-sm font-black text-black">
-                  <span>AMOUNT PAID</span>
-                  <span>{ugx(receipt.amount_paid)}</span>
-                </div>
-                <div className="flex justify-between font-bold text-black">
-                  <span>Interest portion</span>
-                  <span>{ugx(receipt.interest_portion)}</span>
-                </div>
-                <div className="flex justify-between font-bold text-black">
-                  <span>Principal portion</span>
-                  <span>{ugx(receipt.principal_portion)}</span>
-                </div>
-              </div>
-
-              <div className="border-t-2 border-dashed border-black my-2" />
+              <div style={{ borderTop: '2px dashed #000', margin: '6px 0' }} />
 
               {/* Remaining balance */}
-              <div className="space-y-1 text-xs">
-                <div className="font-black text-black uppercase tracking-wide text-xs mb-0.5">-- REMAINING BALANCE --</div>
-                <div className="flex justify-between text-sm font-black text-black">
-                  <span>Total</span>
-                  <span>{ugx(receipt.balance_total_after)}</span>
-                </div>
-                <div className="flex justify-between font-bold text-black">
-                  <span>Interest</span>
-                  <span>{ugx(receipt.balance_interest_after)}</span>
-                </div>
-                <div className="flex justify-between font-bold text-black">
-                  <span>Principal</span>
-                  <span>{ugx(receipt.balance_principal_after)}</span>
-                </div>
+              <div style={{ fontSize: 11, fontWeight: 900, color: '#000', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 3 }}>-- REMAINING BALANCE --</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 900, color: '#000', marginBottom: 3 }}>
+                <span>Total</span><span>{ugx(receipt.balance_total_after)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700, color: '#000', marginBottom: 2 }}>
+                <span>Interest</span><span>{ugx(receipt.balance_interest_after)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700, color: '#000', marginBottom: 2 }}>
+                <span>Principal</span><span>{ugx(receipt.balance_principal_after)}</span>
               </div>
 
-              <div className="border-t-2 border-dashed border-black my-2" />
+              <div style={{ borderTop: '2px dashed #000', margin: '6px 0' }} />
 
               {/* Method */}
-              <div className="space-y-1 text-xs">
-                <div className="flex justify-between">
-                  <span className="font-bold text-black">Method</span>
-                  <span className="font-black text-black capitalize">{methodLabel}</span>
-                </div>
-                {receipt.transaction_reference && (
-                  <div className="flex justify-between">
-                    <span className="font-bold text-black">Reference</span>
-                    <span className="font-black text-black">{receipt.transaction_reference}</span>
-                  </div>
-                )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700, color: '#000', marginBottom: 2 }}>
+                <span>Method</span><span style={{ fontWeight: 900, textTransform: 'capitalize' }}>{methodLabel}</span>
               </div>
+              {receipt.transaction_reference && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700, color: '#000', marginBottom: 2 }}>
+                  <span>Reference</span><span style={{ fontWeight: 900 }}>{receipt.transaction_reference}</span>
+                </div>
+              )}
 
-              {/* Loan cleared banner */}
+              {/* Loan cleared */}
               {receipt.loan_cleared && (
                 <>
-                  <div className="border-t-2 border-dashed border-black my-2" />
-                  <div className="text-center py-1">
-                    <div className="text-sm font-black text-black">*** LOAN FULLY CLEARED! ***</div>
-                    <div className="text-xs font-bold text-black">Congratulations on completing your loan</div>
-                  </div>
+                  <div style={{ borderTop: '2px dashed #000', margin: '6px 0' }} />
+                  <div style={{ textAlign: 'center', fontSize: 15, fontWeight: 900, color: '#000' }}>*** LOAN FULLY CLEARED! ***</div>
+                  <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#000' }}>Congratulations on completing your loan</div>
                 </>
               )}
 
-              <div className="border-t-2 border-dashed border-black my-2" />
+              <div style={{ borderTop: '2px dashed #000', margin: '6px 0' }} />
 
               {/* Footer */}
-              <div className="text-center text-xs font-bold text-black space-y-0.5">
-                <div className="font-black text-black">Thank you for your payment!</div>
+              <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#000' }}>
+                <div style={{ fontWeight: 900, marginBottom: 2 }}>Thank you for your payment!</div>
                 <div>Please keep this receipt for your records.</div>
-                <div className="mt-1">Kadaka Establishment Co. (U) LTD</div>
+                <div style={{ marginTop: 4 }}>{orgDetails.org_name}</div>
                 <div>© {new Date().getFullYear()} All rights reserved</div>
               </div>
 
@@ -248,13 +212,24 @@ function ReceiptModal({ receipt, onClose }: { receipt: ReceiptData; onClose: () 
 export default function PaymentsPageClient() {
   const { user } = useAuth();
   const role = user?.role ?? '';
+  const [viewMode, setViewMode]       = useState<'day' | 'period'>('day');
+  const [selectedDate, setSelectedDate] = useState(today());
+  const [dateFrom, setDateFrom]         = useState(() => { const d = new Date(); d.setDate(1); return d.toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' }); });
+  const [dateTo,   setDateTo]           = useState(today());
   const [payList,  setPayList]  = useState<Payment[]>([]);
   const [actLoans, setActLoans] = useState<ActiveLoan[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState('');
   const [toast,    setToast]    = useState('');
   const [search,   setSearch]   = useState('');
-  const [showModal, setShowModal] = useState(false);
+  const [showModal,  setShowModal]  = useState(false);
+  const [tableView,  setTableView]  = useState<'list' | 'collection'>('list');
+
+  const shiftDate = (days: number) => {
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() + days);
+    setSelectedDate(d.toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' }));
+  };
 
   // Edit state
   const [editPayment, setEditPayment] = useState<Payment | null>(null);
@@ -285,12 +260,15 @@ export default function PaymentsPageClient() {
   const fetchData = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const [p, al] = await Promise.all([payments.getAll({ limit: 100 }), loans.getActive()]);
+      const params: Record<string, string | number> = viewMode === 'day'
+        ? { date: selectedDate, limit: 200 }
+        : { date_from: dateFrom, date_to: dateTo, limit: 500 };
+      const [p, al] = await Promise.all([payments.getAll(params), loans.getActive()]);
       setPayList((p.data ?? []) as Payment[]);
       setActLoans((Array.isArray(al) ? al : []) as ActiveLoan[]);
     } catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setLoading(false); }
-  }, []);
+  }, [viewMode, selectedDate, dateFrom, dateTo]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -391,8 +369,19 @@ export default function PaymentsPageClient() {
     return !q || p.member_name?.toLowerCase().includes(q) || p.receipt_number?.toLowerCase().includes(q) || p.loan_number?.toLowerCase().includes(q);
   });
 
-  const todayTotal  = payList.filter(p => p.payment_date?.startsWith(today())).reduce((s, p) => s + Number(p.amount_paid), 0);
-  const todayCount  = payList.filter(p => p.payment_date?.startsWith(today())).length;
+  const dayTotal  = payList.reduce((s, p) => s + Number(p.amount_paid), 0);
+  const dayCount  = payList.length;
+  const isToday   = selectedDate === today();
+  const fmtDate   = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('en-UG', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Africa/Kampala' });
+  const dateLabel = viewMode === 'day'
+    ? new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-UG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Africa/Kampala' })
+    : `${fmtDate(dateFrom)} — ${fmtDate(dateTo)}`;
+
+  // Collection sheet: cross-reference active loans vs payments for the day
+  const paidLoanNumbers = new Set(payList.map(p => p.loan_number));
+  const paidLoans   = actLoans.filter(l => paidLoanNumbers.has(l.loan_number));
+  const unpaidLoans = actLoans.filter(l => !paidLoanNumbers.has(l.loan_number));
+  const paidDetails = (loanNumber: string) => payList.find(p => p.loan_number === loanNumber);
 
   const inputCls = 'w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50 focus:bg-white';
   const labelCls = 'block text-xs font-semibold text-gray-700 mb-1.5';
@@ -422,18 +411,58 @@ export default function PaymentsPageClient() {
 
       {error && <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-700 flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" />{error}</div>}
 
-      {/* Auto-cashbook banner */}
-      <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-100 rounded-2xl text-sm text-blue-800">
-        <BookOpen className="w-4 h-4 shrink-0 mt-0.5 text-blue-600" />
-        <span><span className="font-semibold">Smart Cashbook:</span> All payments are automatically recorded in the cashbook as Cash In — no manual double entry needed.</span>
+      {/* Date Filter */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
+        {/* Mode toggle */}
+        <div className="flex gap-2">
+          <button onClick={() => setViewMode('day')} className={`flex-1 py-2 text-xs font-semibold rounded-xl transition-colors ${viewMode === 'day' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+            Single Day
+          </button>
+          <button onClick={() => setViewMode('period')} className={`flex-1 py-2 text-xs font-semibold rounded-xl transition-colors ${viewMode === 'period' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+            Date Range
+          </button>
+        </div>
+
+        {/* Day navigator */}
+        {viewMode === 'day' && (
+          <div className="flex items-center justify-between gap-3">
+            <button onClick={() => shiftDate(-1)} className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-gray-600"><ChevronLeft className="w-5 h-5" /></button>
+            <div className="flex items-center gap-3 flex-1 justify-center">
+              <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} max={today()} className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 font-semibold text-gray-800" />
+              {!isToday && <button onClick={() => setSelectedDate(today())} className="px-3 py-2 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-xl hover:bg-green-100 transition-colors">Today</button>}
+            </div>
+            <button onClick={() => shiftDate(1)} disabled={isToday} className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-gray-600 disabled:opacity-30"><ChevronRight className="w-5 h-5" /></button>
+          </div>
+        )}
+
+        {/* Period picker */}
+        {viewMode === 'period' && (
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <div className="flex items-center gap-2 flex-1 w-full">
+              <span className="text-xs font-semibold text-gray-500 w-8 shrink-0">From</span>
+              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} max={dateTo} className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 font-semibold text-gray-800" />
+            </div>
+            <div className="flex items-center gap-2 flex-1 w-full">
+              <span className="text-xs font-semibold text-gray-500 w-8 shrink-0">To</span>
+              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} min={dateFrom} max={today()} className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 font-semibold text-gray-800" />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         {[
-          { label: "Today's Collections", value: ugx(todayTotal), sub: `${todayCount} payment${todayCount !== 1 ? 's' : ''}`, color: 'text-green-600', bg: 'bg-green-50' },
+          {
+            label: viewMode === 'period' ? 'Period Collections' : isToday ? "Today's Collections" : 'Collections',
+            value: ugx(dayTotal),
+            sub: `${dayCount} payment${dayCount !== 1 ? 's' : ''}`,
+            color: 'text-green-600', bg: 'bg-green-50'
+          },
           { label: 'Active Loans', value: actLoans.length, sub: 'available for payment', color: 'text-blue-600', bg: 'bg-blue-50' },
-          { label: 'Total Recorded', value: payList.length, sub: 'all time', color: 'text-purple-600', bg: 'bg-purple-50' },
+          viewMode === 'period'
+            ? { label: 'Period', value: `${fmtDate(dateFrom)}`, sub: `to ${fmtDate(dateTo)}`, color: 'text-purple-600', bg: 'bg-purple-50' }
+            : { label: 'Date', value: fmtDate(selectedDate), sub: isToday ? 'today' : 'selected', color: 'text-purple-600', bg: 'bg-purple-50' },
         ].map(({ label, value, sub, color, bg }) => (
           <div key={label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className={`inline-flex px-2 py-0.5 rounded-lg ${bg} ${color} text-xs font-semibold mb-2`}>{label}</div>
@@ -454,9 +483,90 @@ export default function PaymentsPageClient() {
 
       {/* Payments table */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        {/* Table header with view tabs */}
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-green-600" />
+            <h2 className="font-bold text-gray-900 text-sm">{dateLabel}</h2>
+          </div>
+          {viewMode === 'day' && (
+            <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+              <button onClick={() => setTableView('list')} className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${tableView === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                Payments
+              </button>
+              <button onClick={() => setTableView('collection')} className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${tableView === 'collection' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                Collection Sheet
+              </button>
+            </div>
+          )}
+        </div>
+
         {loading ? <div className="p-6 space-y-3">{[...Array(5)].map((_, i) => <Sk key={i} />)}</div>
-          : filtered.length === 0 ? <div className="p-12 text-center text-sm text-gray-400">No payments found</div>
-          : (
+
+        : tableView === 'collection' && viewMode === 'day' ? (
+          <div>
+            {/* Summary bar */}
+            <div className="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100">
+              <div className="px-4 py-3 text-center">
+                <p className="text-lg font-extrabold text-green-600">{paidLoans.length}</p>
+                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Paid</p>
+              </div>
+              <div className="px-4 py-3 text-center">
+                <p className="text-lg font-extrabold text-red-500">{unpaidLoans.length}</p>
+                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Not Paid</p>
+              </div>
+              <div className="px-4 py-3 text-center">
+                <p className="text-lg font-extrabold text-gray-800">{actLoans.length}</p>
+                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Total</p>
+              </div>
+            </div>
+
+            {actLoans.length === 0
+              ? <div className="p-12 text-center text-sm text-gray-400">No active loans found</div>
+              : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead><tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500 font-semibold uppercase tracking-wide">
+                      <th className="px-5 py-3 text-left">Status</th>
+                      <th className="px-4 py-3 text-left">Member</th>
+                      <th className="px-4 py-3 text-left hidden sm:table-cell">Group</th>
+                      <th className="px-4 py-3 text-right">Balance Due</th>
+                      <th className="px-4 py-3 text-right hidden md:table-cell">Paid</th>
+                      <th className="px-4 py-3 text-center hidden md:table-cell">Receipt</th>
+                    </tr></thead>
+                    <tbody>
+                      {/* Paid first, then unpaid */}
+                      {[...paidLoans, ...unpaidLoans].map(l => {
+                        const pay = paidDetails(l.loan_number);
+                        const paid = !!pay;
+                        return (
+                          <tr key={l.id} className={`border-b border-gray-50 ${paid ? 'bg-green-50/40' : 'bg-red-50/30'}`}>
+                            <td className="px-5 py-3">
+                              {paid
+                                ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700 border border-green-200">✓ Paid</span>
+                                : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-600 border border-red-200">✗ Not Paid</span>
+                              }
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="font-semibold text-gray-900">{l.member_name}</p>
+                              <p className="text-xs text-gray-500 font-mono">{l.loan_number}</p>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-gray-600 hidden sm:table-cell">{l.group_name || '—'}</td>
+                            <td className="px-4 py-3 text-right text-xs font-semibold text-gray-700">{ugx(l.balance_total)}</td>
+                            <td className="px-4 py-3 text-right text-xs font-bold text-green-700 hidden md:table-cell">{pay ? ugx(pay.amount_paid) : '—'}</td>
+                            <td className="px-4 py-3 text-center text-xs font-mono text-gray-500 hidden md:table-cell">{pay?.receipt_number ?? '—'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            }
+          </div>
+
+        ) : filtered.length === 0 ? <div className="p-12 text-center text-sm text-gray-400">No payments recorded for this date</div>
+        : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500 font-semibold uppercase tracking-wide">

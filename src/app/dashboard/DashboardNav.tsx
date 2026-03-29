@@ -8,9 +8,10 @@ import {
   Banknote, BookOpen, BarChart3, FileText,
   Settings, LogOut, Menu, X, Bell,
   ChevronRight, Search, AlertCircle, UserCog, ClipboardList, Database,
-  MessageSquare,
+  MessageSquare, Building2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOrg } from '@/contexts/OrgContext';
 import { getRoleLabel, getInitials } from '@/lib/auth';
 import { dashboard } from '@/lib/api';
 import { useSocket } from '@/contexts/SocketContext';
@@ -27,6 +28,7 @@ const NAV_ADMIN = [
   { name: 'Users',           path: '/users',            icon: UserCog },
   { name: 'Audit Logs',      path: '/audit-logs',       icon: ClipboardList },
   { name: 'Data Management', path: '/data-management',  icon: Database },
+  { name: 'Branches',        path: '/branches',         icon: Building2 },
 ];
 const NAV_SUPPORT = [
   { name: 'Messages',  path: '/messages',  icon: MessageSquare },
@@ -36,6 +38,7 @@ const NAV_SUPPORT = [
 
 export default function DashboardNav() {
   const { user, logout } = useAuth();
+  const { orgDetails }   = useOrg();
   const { totalUnread }  = useSocket();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -105,11 +108,11 @@ export default function DashboardNav() {
         <div className="flex items-center gap-3 px-5 h-16 border-b border-slate-100 shrink-0">
           <Link href="/dashboard" className="flex items-center gap-3" onClick={() => setSidebarOpen(false)}>
             <div className="w-8 h-8 rounded-xl bg-green-600 flex items-center justify-center shadow-sm shrink-0">
-              <span className="text-white font-bold text-base leading-none">K</span>
+              <span className="text-white font-bold text-base leading-none">Q</span>
             </div>
             <div className="leading-tight">
-              <p className="text-sm font-bold text-slate-900">Kadaka</p>
-              <p className="text-[10px] text-slate-400">Establishment Co.</p>
+              <p className="text-sm font-bold text-slate-900">Quewola</p>
+              <p className="text-[10px] text-slate-400 truncate max-w-[120px]">{orgDetails.org_name}</p>
             </div>
           </Link>
           <button
@@ -216,7 +219,7 @@ export default function DashboardNav() {
 
         {/* Breadcrumb */}
         <div className="flex items-center gap-1.5 text-sm">
-          <span className="text-slate-400 hidden sm:block font-medium">Kadaka</span>
+          <span className="text-slate-400 hidden sm:block font-medium">Quewola</span>
           <ChevronRight className="w-3.5 h-3.5 text-slate-300 hidden sm:block" />
           <span className="font-semibold text-slate-900">{currentPage}</span>
         </div>

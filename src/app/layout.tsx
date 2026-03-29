@@ -3,9 +3,9 @@ import "./globals.css";
 import { Providers } from "@/components/Providers";
 
 export const metadata: Metadata = {
-  title: "Kadaka | Lending Management System",
+  title: "Quewola | Lending Management Platform",
   description:
-    "Digitize and streamline the lending lifecycle for Kadaka Establishment Co. (U) LTD",
+    "Quewola — digitize and streamline the lending lifecycle for microfinance institutions.",
 };
 
 export default function RootLayout({

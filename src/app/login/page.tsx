@@ -148,17 +148,17 @@ export default function SignInPage() {
         <div className="flex flex-col justify-center px-6 py-12 sm:px-10 lg:px-14 xl:px-20 bg-white">
           <Link href="/" className="flex items-center gap-2.5 mb-10 w-fit">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-green-500 to-green-700 flex items-center justify-center shadow-sm">
-              <span className="text-white font-bold text-lg leading-none">K</span>
+              <span className="text-white font-bold text-lg leading-none">Q</span>
             </div>
             <div className="leading-tight">
-              <p className="text-sm font-bold text-gray-900">Kadaka</p>
-              <p className="text-[10px] text-green-600 font-medium">Establishment Co.</p>
+              <p className="text-sm font-bold text-gray-900">Quewola</p>
+              <p className="text-[10px] text-green-600 font-medium">Lending Platform</p>
             </div>
           </Link>
 
           <div className="max-w-sm w-full">
             <h1 className="text-2xl font-extrabold text-gray-900 mb-1">Welcome back</h1>
-            <p className="text-sm text-gray-500 mb-8">Sign in to your Kadaka account</p>
+            <p className="text-sm text-gray-500 mb-8">Sign in to your Quewola account</p>
 
             {error && (
               <div className="flex items-start gap-3 p-3.5 bg-red-50 border border-red-200 rounded-xl mb-6">
@@ -171,7 +171,7 @@ export default function SignInPage() {
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1.5">Email Address</label>
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@kadaka.ug" required autoComplete="email"
+                  placeholder="you@example.com" required autoComplete="email"
                   className="w-full px-3.5 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-gray-50 focus:bg-white" />
               </div>
 
@@ -236,7 +236,7 @@ export default function SignInPage() {
                 </div>
                 <div>
                   <p className="text-xs font-bold text-white">Nakitaga Robert</p>
-                  <p className="text-xs text-green-200">Loan Officer, Kadaka</p>
+                  <p className="text-xs text-green-200">Loan Officer, Quewola</p>
                 </div>
               </div>
             </div>

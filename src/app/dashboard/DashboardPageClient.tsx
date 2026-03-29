@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { TrendingUp, DollarSign, AlertTriangle, Users, ArrowUpRight, Clock, CheckCircle, BarChart3, RefreshCw } from 'lucide-react';
-import { dashboard } from '@/lib/api';
+import { TrendingUp, DollarSign, AlertTriangle, Users, ArrowUpRight, Clock, CheckCircle, BarChart3, RefreshCw, UserCheck, UserX } from 'lucide-react';
+import { dashboard, payments, loans } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { todayUG } from '@/lib/dateUtils';
 import OfficerPortfolioClient from './OfficerPortfolioClient';
 
 type Stats = { totalMembers: number; activeLoans: number; totalPortfolio: number; collectionsToday: number; collectionsMTD: number; overdueLoans: number; portfolioAtRisk: number; disbursementsToday: number; pendingApprovals?: number };
@@ -25,19 +26,31 @@ const StatusBadge = ({ s }: { s: string }) => {
 // ── Org-wide branch manager dashboard ───────────────────────────────────────
 function BranchManagerDashboard() {
   const { user } = useAuth();
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [loans, setLoans]  = useState<LoanRow[]>([]);
-  const [pays,  setPays]   = useState<PayRow[]>([]);
-  const [ovdue, setOvdue]  = useState<OvRow[]>([]);
+  const [stats,      setStats]      = useState<Stats | null>(null);
+  const [loanRows,   setLoanRows]   = useState<LoanRow[]>([]);
+  const [pays,       setPays]       = useState<PayRow[]>([]);
+  const [ovdue,      setOvdue]      = useState<OvRow[]>([]);
+  const [paidCount,  setPaidCount]  = useState(0);
+  const [totalActive, setTotalActive] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
 
   const fetchAll = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const [s, rl, rp, ol] = await Promise.all([dashboard.getStats(), dashboard.getRecentLoans(), dashboard.getRecentPayments(), dashboard.getOverdueLoans()]);
+      const [s, rl, rp, ol, tp, al] = await Promise.all([
+        dashboard.getStats(),
+        dashboard.getRecentLoans(),
+        dashboard.getRecentPayments(),
+        dashboard.getOverdueLoans(),
+        payments.getAll({ date: todayUG(), limit: 500 }),
+        loans.getActive(),
+      ]);
       setStats(s);
-      setLoans(arr(rl)); setPays(arr(rp)); setOvdue(arr(ol));
+      setLoanRows(arr(rl)); setPays(arr(rp)); setOvdue(arr(ol));
+      const todayPays = (tp.data ?? []) as { loan_number: string }[];
+      setPaidCount(new Set(todayPays.map(p => p.loan_number)).size);
+      setTotalActive((Array.isArray(al) ? al : []).length);
     } catch (e) { setError(e instanceof Error ? e.message : 'Failed to load.'); }
     finally { setLoading(false); }
   }, []);
@@ -83,6 +96,41 @@ function BranchManagerDashboard() {
         ) : null}
       </div>
 
+      {/* Today's Collection Status */}
+      {!loading && (
+        <div className="grid grid-cols-2 gap-4">
+          <Link href="/payments" className="bg-white rounded-2xl border border-green-100 shadow-sm p-5 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Paid Today</p>
+              <div className="w-9 h-9 rounded-xl bg-green-50 flex items-center justify-center">
+                <UserCheck className="w-5 h-5 text-green-600" />
+              </div>
+            </div>
+            <p className="text-3xl font-extrabold text-green-600">{paidCount}</p>
+            <p className="text-xs text-gray-500 mt-1">borrower{paidCount !== 1 ? 's' : ''} paid</p>
+            <div className="mt-3 h-1.5 bg-green-100 rounded-full overflow-hidden">
+              <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: totalActive > 0 ? `${Math.round((paidCount / totalActive) * 100)}%` : '0%' }} />
+            </div>
+            <p className="text-[10px] text-green-600 font-semibold mt-1">{totalActive > 0 ? Math.round((paidCount / totalActive) * 100) : 0}% collection rate</p>
+          </Link>
+
+          <Link href="/payments" className="bg-white rounded-2xl border border-red-100 shadow-sm p-5 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Not Paid Today</p>
+              <div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center">
+                <UserX className="w-5 h-5 text-red-500" />
+              </div>
+            </div>
+            <p className="text-3xl font-extrabold text-red-500">{Math.max(0, totalActive - paidCount)}</p>
+            <p className="text-xs text-gray-500 mt-1">borrower{(totalActive - paidCount) !== 1 ? 's' : ''} pending</p>
+            <div className="mt-3 h-1.5 bg-red-100 rounded-full overflow-hidden">
+              <div className="h-full bg-red-400 rounded-full transition-all" style={{ width: totalActive > 0 ? `${Math.round(((totalActive - paidCount) / totalActive) * 100)}%` : '0%' }} />
+            </div>
+            <p className="text-[10px] text-red-500 font-semibold mt-1">of {totalActive} active loans</p>
+          </Link>
+        </div>
+      )}
+
       {/* Summary strip */}
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -111,7 +159,7 @@ function BranchManagerDashboard() {
             <Link href="/loans" className="text-xs text-green-600 font-semibold hover:underline">View all</Link>
           </div>
           {loading ? <div className="p-5 space-y-3">{[...Array(4)].map((_, i) => <Sk key={i} className="h-10" />)}</div>
-            : loans.length === 0 ? <div className="p-8 text-center text-sm text-gray-400">No recent loans</div>
+            : loanRows.length === 0 ? <div className="p-8 text-center text-sm text-gray-400">No recent loans</div>
             : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -121,7 +169,7 @@ function BranchManagerDashboard() {
                     <th className="px-4 py-3 text-right">Amount</th><th className="px-4 py-3 text-center">Status</th>
                   </tr></thead>
                   <tbody>
-                    {loans.slice(0, 5).map((l, i) => (
+                    {loanRows.slice(0, 5).map((l, i) => (
                       <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
                         <td className="px-5 py-3 font-mono font-semibold text-xs text-gray-700">{l.loan_number}</td>
                         <td className="px-4 py-3 font-medium text-gray-800">{l.member_name}</td>

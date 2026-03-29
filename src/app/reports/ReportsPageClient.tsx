@@ -33,7 +33,16 @@ function downloadCSV(filename: string, rows: string[][]): void {
 }
 
 // ── PDF helper (browser print) ───────────────────────────────────────────────
+function getOrgName(): string {
+  try {
+    const keys = Object.keys(localStorage).find(k => k.startsWith('quewola_org_'));
+    if (keys) { const d = JSON.parse(localStorage.getItem(keys) ?? '{}'); return d?.details?.org_name || 'My Organisation'; }
+  } catch {}
+  return 'My Organisation';
+}
+
 function printReport(title: string, content: string): void {
+  const orgName = getOrgName();
   const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -54,7 +63,7 @@ function printReport(title: string, content: string): void {
   </style>
 </head>
 <body>
-  <div class="logo">Kadaka Establishment Co. Ltd</div>
+  <div class="logo">${orgName}</div>
   <h1>${title}</h1>
   <div class="sub">Generated on ${new Date().toLocaleDateString('en-UG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Africa/Kampala' })}</div>
   ${content}
