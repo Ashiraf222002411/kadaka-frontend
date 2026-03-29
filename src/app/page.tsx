@@ -56,7 +56,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-6xl px-4 sm:px-6 h-full flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-green-600 flex items-center justify-center shadow-sm">
-              <span className="text-white font-bold text-sm">K</span>
+              <span className="text-white font-bold text-sm">Q</span>
             </div>
             <span className="font-bold text-slate-900 text-sm">Quewola</span>
           </Link>
@@ -273,7 +273,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-6xl flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center">
-              <span className="text-white font-bold text-xs">K</span>
+              <span className="text-white font-bold text-xs">Q</span>
             </div>
             <span className="text-sm font-bold text-white">Quewola</span>
             <span className="text-slate-600 text-xs ml-2">© 2026 Quewola Platform</span>
